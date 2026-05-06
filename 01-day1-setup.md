@@ -236,13 +236,31 @@ git --version     # git version 2.x.x
 
 ### 2-2. OpenClaw 설치
 
-> ⏳ 이 섹션은 실제 VM 검증 후 정확한 명령으로 갱신됩니다. 현재 가설:
-{: .warning }
+OpenClaw 공식 설치 스크립트를 사용합니다.
+
+#### Windows
+
+PowerShell 새 창에서:
 
 ```powershell
-npm install -g openclaw
+powershell -c "irm https://openclaw.ai/install.ps1 | iex"
+```
+
+`irm`(Invoke-RestMethod)으로 [openclaw.ai](https://openclaw.ai)에서 `install.ps1`을 받아 `iex`(Invoke-Expression)로 실행합니다. 설치 진행 상황이 PowerShell에 출력됩니다.
+
+#### macOS / Linux
+
+[openclaw.ai](https://openclaw.ai) 다운로드 페이지에서 본인 OS용 설치 명령을 확인하여 실행하세요.
+
+#### 설치 확인
+
+설치 후 PowerShell 창을 **닫고 새로 열어서**:
+
+```powershell
 openclaw --version
 ```
+
+버전이 정상 출력되면 설치 성공.
 
 ### 2-3. 초기 설정 마법사
 
