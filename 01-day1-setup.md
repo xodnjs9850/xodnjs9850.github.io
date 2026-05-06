@@ -210,14 +210,27 @@ Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
 ```
 
-그 다음 Node와 Git 설치:
+**Node.js LTS 설치** (Node 22 LTS 기준):
 
 ```bash
-brew install node git
+brew install node@22
+echo "export PATH=\"$(brew --prefix node@22)/bin:\$PATH\"" >> ~/.zshrc
+source ~/.zshrc
 ```
 
-> macOS는 일반적으로 Git이 Xcode Command Line Tools와 함께 미리 설치돼 있습니다. `git --version`이 이미 떠 있으면 `brew install node`만 실행하면 됩니다.
+> Homebrew의 `node@22`는 다른 node 버전과 충돌 방지를 위해 PATH에 자동 등록되지 않습니다(keg-only). 그래서 두 번째 줄로 PATH에 직접 추가합니다.
+> - **zsh 사용자(macOS 기본)**: 위 그대로
+> - **bash 사용자**: `~/.zshrc` → `~/.bash_profile`로 바꿔서 실행
+> - **다른 LTS 버전**: `node@22`를 `node@20` 등으로 교체. 사용 가능 목록은 `brew search node@`
 {: .note }
+
+**Git 설치**:
+
+macOS는 보통 Xcode Command Line Tools와 함께 Git이 미리 설치돼 있습니다. `git --version`이 이미 떠 있으면 추가 설치 불필요. 없다면:
+
+```bash
+brew install git
+```
 
 #### 확인
 
