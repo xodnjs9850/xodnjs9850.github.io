@@ -161,9 +161,9 @@ OpenClaw는 **내 PC 안에서 도는 LLM 비서**다.
 
 ### 2-1. Node.js + Git 설치 및 확인
 
-OpenClaw는 **Node.js** 위에서 동작하고, 일부 명령에서 **Git**을 사용한다. [사전 과제](00-pre-assignment.html)에서 이미 설치하셨다면 [확인 부분](#확인)만 실행하면 됩니다.
+OpenClaw는 **Node.js** 위에서 동작하고, 일부 명령에서 **Git**을 사용한다. [사전 과제](00-pre-assignment.html)에서 이미 설치하셨다면 [확인](#확인)만 실행하면 됩니다.
 
-#### 설치
+#### 설치 — Windows
 
 PowerShell을 **관리자 권한**으로 열고:
 
@@ -179,11 +179,28 @@ winget install -e --id Git.Git
 > - Git: [git-scm.com/download/win](https://git-scm.com/download/win)
 {: .note }
 
+#### 설치 — macOS
+
+[Homebrew](https://brew.sh)를 사용합니다. brew가 설치돼 있지 않다면 먼저:
+
+```bash
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+```
+
+그 다음 Node와 Git 설치:
+
+```bash
+brew install node git
+```
+
+> macOS는 일반적으로 Git이 Xcode Command Line Tools와 함께 미리 설치돼 있습니다. `git --version`이 이미 떠 있으면 `brew install node`만 실행하면 됩니다.
+{: .note }
+
 #### 확인
 
-새 PowerShell 창에서:
+새 터미널 창(Windows는 PowerShell, macOS는 Terminal)에서:
 
-```powershell
+```bash
 node --version    # v20.x.x 이상
 npm --version     # 10.x.x 이상
 git --version     # git version 2.x.x
