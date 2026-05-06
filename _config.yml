@@ -18,6 +18,10 @@ search:
 heading_anchors: true
 color_scheme: light
 
+# Mermaid 다이어그램 (코드블록 ```mermaid 자동 렌더링)
+mermaid:
+  version: "10.6.1"
+
 # 상단 우측 보조 링크
 aux_links:
   "GitHub":
