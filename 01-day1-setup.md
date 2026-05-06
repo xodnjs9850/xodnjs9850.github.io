@@ -182,6 +182,19 @@ OpenClaw는 **Node.js** 위에서 동작하고, 일부 명령에서 **Git**을 �
 
 설치 후 PowerShell 창을 **닫고 새로 열어서** PATH 갱신을 반영합니다.
 
+**PowerShell 스크립트 실행 정책 설정 (Windows 필수)**
+
+Windows PowerShell의 기본 정책은 `npm.ps1` 같은 스크립트 실행을 막습니다. **새 PowerShell 창**에서 다음을 실행해 정책을 완화하세요 (관리자 권한 불필요).
+
+```powershell
+Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
+```
+
+"예(Y)" 또는 Enter 입력. 한 번만 하면 됩니다.
+
+> `RemoteSigned`는 로컬 스크립트는 허용하고 원격 스크립트는 서명을 요구하는 표준 보안 정책입니다. `-Scope CurrentUser`로 시스템 전역이 아닌 현재 사용자에만 적용됩니다.
+{: .note }
+
 > winget이 동작하는 환경(Windows 11 또는 App Installer가 탑재된 Win10)에서는 PowerShell **관리자 권한**으로 한 번에 설치할 수 있습니다.
 > ```powershell
 > winget install -e --id OpenJS.NodeJS.LTS
@@ -218,15 +231,7 @@ git --version     # git version 2.x.x
 
 세 개 모두 버전이 떠야 다음 단계로 진행 가능합니다.
 
-> **⚠️ Windows에서 `npm --version` 실행 시 "이 시스템에서 스크립트를 실행할 수 없으므로 npm.ps1 파일을 로드할 수 없습니다" 에러가 뜨면**
->
-> PowerShell의 ExecutionPolicy가 `npm.ps1` 실행을 막고 있는 것입니다. PowerShell에서 다음을 실행해 정책을 완화하세요 (관리자 권한 불필요).
->
-> ```powershell
-> Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
-> ```
->
-> "예(Y)" 또는 Enter 입력 후, PowerShell 창을 **새로 열어** `npm --version` 다시 시도. `RemoteSigned`는 로컬 스크립트는 허용하고 원격 스크립트만 서명을 요구하는 표준 보안 정책이며, `-Scope CurrentUser`로 시스템 전역이 아닌 현재 사용자에만 적용됩니다.
+> **`npm --version` 실행 시 "스크립트를 실행할 수 없습니다" 에러가 뜬다면** 위의 [PowerShell 스크립트 실행 정책 설정](#설치--windows) 단계를 건너뛰셨기 때문입니다. 그 명령을 먼저 실행하고 PowerShell 창을 새로 열어 다시 시도하세요.
 {: .warning }
 
 ### 2-2. OpenClaw 설치
