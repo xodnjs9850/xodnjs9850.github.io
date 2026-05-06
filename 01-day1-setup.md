@@ -263,7 +263,13 @@ powershell -c "irm https://openclaw.ai/install.ps1 | iex"
 
 #### macOS / Linux
 
-[openclaw.ai](https://openclaw.ai) 다운로드 페이지에서 본인 OS용 설치 명령을 확인하여 실행하세요.
+터미널에서:
+
+```bash
+curl -fsSL https://openclaw.ai/install.sh | bash
+```
+
+`curl`로 [openclaw.ai](https://openclaw.ai)에서 `install.sh`를 받아 bash로 실행합니다.
 
 #### 설치 확인
 
