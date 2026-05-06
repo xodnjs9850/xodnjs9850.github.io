@@ -50,9 +50,22 @@ npm --version
 
 ### macOS
 
+Node.js LTS (Node 22 LTS 기준):
+
 ```bash
-brew install node
+brew install node@22
+echo "export PATH=\"$(brew --prefix node@22)/bin:\$PATH\"" >> ~/.zshrc
+source ~/.zshrc
 ```
+
+Git은 macOS의 Xcode Command Line Tools와 함께 보통 미리 설치돼 있습니다. `git --version`이 안 뜨면:
+
+```bash
+brew install git
+```
+
+> `node@22`는 keg-only 포뮬라라 PATH에 직접 등록해야 합니다. 자세한 설명은 [Day 1: 설치 — macOS](01-day1-setup.html#설치--macos) 참조.
+{: .note }
 
 ---
 
