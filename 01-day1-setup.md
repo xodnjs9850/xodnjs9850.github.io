@@ -165,18 +165,28 @@ OpenClaw는 **Node.js** 위에서 동작하고, 일부 명령에서 **Git**을 �
 
 #### 설치 — Windows
 
-PowerShell을 **관리자 권한**으로 열고:
+> Windows 10 일부 빌드는 `winget`(App Installer)이 미탑재되어 있습니다. **직접 installer로 설치하는 게 가장 안정적입니다.**
+{: .warning }
 
-```powershell
-winget install -e --id OpenJS.NodeJS.LTS
-winget install -e --id Git.Git
-```
+**Node.js LTS 설치**
+
+1. [nodejs.org/en/download](https://nodejs.org/en/download) 접속
+2. **Windows Installer (.msi)** + **64-bit** 선택 → 다운로드 버튼 클릭
+3. 다운로드한 `.msi` 더블클릭 → 설치 마법사를 **모든 옵션 기본값**으로 Next → Install
+
+**Git for Windows 설치**
+
+1. [git-scm.com](https://git-scm.com/) 접속
+2. 우측 **Download for Windows** 클릭 → 자동으로 최신 `.exe` 다운로드 시작
+3. 다운로드한 `.exe` 더블클릭 → 설치 마법사를 **모든 옵션 기본값**으로 진행
 
 설치 후 PowerShell 창을 **닫고 새로 열어서** PATH 갱신을 반영합니다.
 
-> winget이 없거나 동작하지 않으면 아래에서 installer를 직접 받아 설치하세요.
-> - Node.js: [nodejs.org/ko/download](https://nodejs.org/ko/download) → "Windows Installer (.msi)" 64-bit
-> - Git: [git-scm.com/download/win](https://git-scm.com/download/win)
+> winget이 동작하는 환경(Windows 11 또는 App Installer가 탑재된 Win10)에서는 PowerShell **관리자 권한**으로 한 번에 설치할 수 있습니다.
+> ```powershell
+> winget install -e --id OpenJS.NodeJS.LTS
+> winget install -e --id Git.Git
+> ```
 {: .note }
 
 #### 설치 — macOS
