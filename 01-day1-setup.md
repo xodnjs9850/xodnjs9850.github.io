@@ -159,14 +159,37 @@ OpenClaw는 **내 PC 안에서 도는 LLM 비서**다.
 > 이 섹션의 명령은 **Windows 10 기준**입니다. macOS/Linux 사용자는 일부 명령이 다릅니다.
 {: .note }
 
-### 2-1. 사전 확인
+### 2-1. Node.js + Git 설치 및 확인
 
-[사전 과제](00-pre-assignment.html)에서 Node.js를 설치했어야 합니다.
+OpenClaw는 **Node.js** 위에서 동작하고, 일부 명령에서 **Git**을 사용한다. [사전 과제](00-pre-assignment.html)에서 이미 설치하셨다면 [확인 부분](#확인)만 실행하면 됩니다.
+
+#### 설치
+
+PowerShell을 **관리자 권한**으로 열고:
+
+```powershell
+winget install -e --id OpenJS.NodeJS.LTS
+winget install -e --id Git.Git
+```
+
+설치 후 PowerShell 창을 **닫고 새로 열어서** PATH 갱신을 반영합니다.
+
+> winget이 없거나 동작하지 않으면 아래에서 installer를 직접 받아 설치하세요.
+> - Node.js: [nodejs.org/ko/download](https://nodejs.org/ko/download) → "Windows Installer (.msi)" 64-bit
+> - Git: [git-scm.com/download/win](https://git-scm.com/download/win)
+{: .note }
+
+#### 확인
+
+새 PowerShell 창에서:
 
 ```powershell
 node --version    # v20.x.x 이상
-npm --version
+npm --version     # 10.x.x 이상
+git --version     # git version 2.x.x
 ```
+
+세 개 모두 버전이 떠야 다음 단계로 진행 가능합니다.
 
 ### 2-2. OpenClaw 설치
 
