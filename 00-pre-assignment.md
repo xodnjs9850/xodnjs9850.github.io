@@ -101,7 +101,22 @@ OpenClaw가 사용할 LLM(두뇌) 제공자입니다. Google AI Studio의 Gemini
 > Gemini 2.5 Flash는 일 1500 요청까지 무료 티어로 충분합니다. 강의용으로는 넉넉.
 {: .note }
 
-> Anthropic Claude **Pro 구독자**가 Claude를 사용하고 싶다면 Gemini 키 대신 Day 1에서 [Pro 구독자용 Claude CLI 경로](01-day1-setup.html#2-5-선택-pro-구독자용-claude-cli-경로)로 진행 가능합니다. 단, 추가 셋업이 필요해 강의 권장 경로는 Gemini입니다.
+### 다른 LLM 제공자 (참고)
+
+OpenClaw 2026.5.4은 약 40여 종의 LLM 제공자를 지원합니다. 강의는 **Gemini 무료 티어**를 가정하지만, 본인 환경/구독에 따라 다른 선택도 가능합니다.
+
+| 카테고리 | 대표 제공자 | 비용 | 적합한 경우 |
+|---|---|---|---|
+| 🌟 **강의 권장** | Google (Gemini) | 무료 (1,500/day) | 가장 단순, 빠른 시작 |
+| 🔐 **로컬 실행** | Ollama, LM Studio, vLLM | 무료 무제한 (전기료만) | 개인정보 외부 노출 0, 오프라인 동작 |
+| 💳 **보유 구독 활용** | Anthropic [Claude CLI](01-day1-setup.html#2-5-선택-pro-구독자용-claude-cli-경로), OpenAI Codex, GitHub Copilot | Pro·Plus 정액 | 이미 결제 중인 구독 재사용 |
+| 🌐 **종량제 메이저** | OpenAI (GPT), Anthropic (Claude API), Mistral AI, xAI (Grok) | $5+ 선불 크레딧 | 모델 품질 최상위, 비용 발생 |
+| ⚡ **저렴/빠른 종량제** | DeepSeek, Groq, Cerebras, Together AI | 매우 저렴 / 무료 한도 큼 | 가성비·속도 |
+| 🧩 **모델 통합 게이트웨이** | OpenRouter, LiteLLM, Cloudflare AI Gateway | 모델별 다양 | 100+ 모델 한 번에 비교/전환 |
+
+전체 목록은 `openclaw setup --wizard`의 **Model/auth provider** 단계에서 검색 가능합니다 (검색창에 키워드 입력).
+
+> 강의 자료는 Gemini를 가정해 작성되었지만, 다른 제공자도 OpenClaw 동작 자체는 동일합니다. 단, 무료 한도·응답 속도·모델 품질이 달라 데모용으로는 검증된 옵션(**Gemini 2.5 Flash**, **Claude Opus/Sonnet**, **GPT** 등)을 권장합니다.
 {: .note }
 
 ---
