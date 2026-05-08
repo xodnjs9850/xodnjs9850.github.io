@@ -110,7 +110,6 @@ OpenClaw 2026.5.4은 약 40여 종의 LLM 제공자를 지원합니다. 강의�
 | 🌟 **강의 권장** | Google (Gemini) | 무료 (1,500/day) | 가장 단순, 빠른 시작 |
 | 💳 **보유 구독 활용** | Anthropic [Claude CLI](01-day1-setup.html#2-5-선택-pro-구독자용-claude-cli-경로), OpenAI Codex, GitHub Copilot | Pro·Plus 정액 | 이미 결제 중인 구독 재사용 |
 | ⚡ **저렴/빠른 종량제** | DeepSeek, Groq, Cerebras, Together AI | 매우 저렴 / 무료 한도 큼 | 가성비·속도 |
-| 🧩 **모델 통합 게이트웨이** | OpenRouter, LiteLLM, Cloudflare AI Gateway | 모델별 다양 | 100+ 모델 한 번에 비교/전환 |
 
 전체 목록은 `openclaw setup --wizard`의 **Model/auth provider** 단계에서 검색 가능합니다 (검색창에 키워드 입력).
 
