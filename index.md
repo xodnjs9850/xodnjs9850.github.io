@@ -18,7 +18,7 @@ nav_order: 1
 
 1. [기본 설정](00-pre-assignment.html) — 강의 시작 전 준비물
 2. [Day 1: 환경 셋업 + 첫 에이전트](01-day1-setup.html)
-3. Day 2: 네이버 메일 연동 *(작성 예정)*
+3. [Day 2: 네이버 메일 연동](02-day2-mail.html)
 4. Day 3: 스팸 분류 + cron 자동 파이프라인 *(작성 예정)*
 5. Day 4: Discord 연결 + 대화형 비서 *(작성 예정)*
 
