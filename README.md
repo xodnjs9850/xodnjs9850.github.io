@@ -8,7 +8,7 @@
 
 - `_config.yml` — Jekyll 설정 (just-the-docs 원격 테마)
 - `index.md` — 강의 홈
-- `00-pre-assignment.md` — 사전 과제
+- `00-pre-assignment.md` — 기본 설정
 - `01-day1-setup.md` — Day 1 환경 셋업
 - (이후 Day 2~4 추가 예정)
 

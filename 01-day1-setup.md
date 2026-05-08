@@ -156,7 +156,7 @@ OpenClaw는 **내 PC 안에서 도는 LLM 비서**다.
 
 ## Block 2: 설치 + 첫 에이전트
 
-> [사전 과제](00-pre-assignment.html)에서 환경(**Windows: WSL2 + Ubuntu**, **macOS: Xcode CLT**)이 준비되었다고 가정합니다. **Windows 사용자는 모든 명령을 Ubuntu(WSL2) 셸 안에서** 실행하세요.
+> [기본 설정](00-pre-assignment.html)에서 환경(**Windows: WSL2 + Ubuntu**, **macOS: Xcode CLT**)이 준비되었다고 가정합니다. **Windows 사용자는 모든 명령을 Ubuntu(WSL2) 셸 안에서** 실행하세요.
 {: .note }
 
 ### 2-1. Node.js LTS + Git 설치
@@ -198,7 +198,7 @@ source ~/.zshrc
 > Homebrew의 `node@22`는 keg-only라 PATH에 직접 등록해야 합니다 (위 두 번째 줄). bash 사용자는 `~/.zshrc` → `~/.bash_profile`로 바꿔주세요.
 {: .note }
 
-Git이 안 떠 있으면(사전 과제에서 점검했지만 누락 시):
+Git이 안 떠 있으면(기본 설정에서 점검했지만 누락 시):
 
 ```bash
 brew install git
@@ -244,7 +244,7 @@ openclaw setup --wizard
 | Setup mode | **QuickStart** |
 | Existing config 처리 | **Use existing values** (또는 처음이면 자동 진행) |
 | Model/auth provider | 검색창에 `google` 입력 → **Google** 선택 (`Google Vertex` 아님) |
-| API key | 사전 과제에서 받아둔 [Gemini API 키](00-pre-assignment.html#2-gemini-api-키-발급) 입력 |
+| API key | 기본 설정에서 받아둔 [Gemini API 키](00-pre-assignment.html#2-gemini-api-키-발급) 입력 |
 | Default model | 기본값(Gemini 2.5 Flash 등) 그대로 |
 | Channel | **Skip for now** (Day 4에서 Discord 연결) |
 | Web search | **DuckDuckGo Search (experimental)** (무료, 키 불필요) |
