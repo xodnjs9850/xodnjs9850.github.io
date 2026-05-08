@@ -29,7 +29,7 @@ nav_order: 3
 |---|---|---|
 | 0:00–0:50 | 1 | 오프닝 / 최종 데모 시연 / AI 에이전트 vs LLM / OpenClaw란? |
 | 1:00–1:50 | 2 | OpenClaw 설치 / 첫 에이전트 1회 실행 |
-| 2:00–2:50 | 3 | OpenClaw 핵심 개념 (채널·세션·스킬·도구) / clawhub 둘러보기 |
+| 2:00–2:50 | 3 | OpenClaw 핵심 개념 (채널·세션·스킬·도구) |
 | 3:00–4:00 | Q&A | 셋업 보조 + 자유 질의응답 |
 
 ---
@@ -156,126 +156,73 @@ OpenClaw는 **내 PC 안에서 도는 LLM 비서**다.
 
 ## Block 2: 설치 + 첫 에이전트
 
-> 이 섹션의 명령은 **Windows 10 기준**입니다. macOS/Linux 사용자는 일부 명령이 다릅니다.
+> [사전 과제](00-pre-assignment.html)에서 환경(**Windows: WSL2 + Ubuntu**, **macOS: Xcode CLT**)이 준비되었다고 가정합니다. **Windows 사용자는 모든 명령을 Ubuntu(WSL2) 셸 안에서** 실행하세요.
 {: .note }
 
-### 2-1. Node.js + Git 설치 및 확인
+### 2-1. Node.js LTS + Git 설치
 
-OpenClaw는 **Node.js** 위에서 동작하고, 일부 명령에서 **Git**을 사용한다. [사전 과제](00-pre-assignment.html)에서 이미 설치하셨다면 [확인](#확인)만 실행하면 됩니다.
+OpenClaw는 Node.js 위에서 동작합니다.
 
-#### 설치 — Windows
+#### Ubuntu (WSL2) — Windows 사용자
 
-> Windows 10 일부 빌드는 `winget`(App Installer)이 미탑재되어 있습니다. **직접 installer로 설치하는 게 가장 안정적입니다.**
-{: .warning }
-
-**Node.js LTS 설치**
-
-1. [nodejs.org/en/download](https://nodejs.org/en/download) 접속
-2. **Windows Installer (.msi)** + **64-bit** 선택 → 다운로드 버튼 클릭
-3. 다운로드한 `.msi` 더블클릭 → 설치 마법사를 **모든 옵션 기본값**으로 Next → Install
-
-**Git for Windows 설치**
-
-1. [git-scm.com](https://git-scm.com/) 접속
-2. 우측 **Download for Windows** 클릭 → 자동으로 최신 `.exe` 다운로드 시작
-3. 다운로드한 `.exe` 더블클릭 → 설치 마법사를 **모든 옵션 기본값**으로 진행
-
-설치 후 PowerShell 창을 **닫고 새로 열어서** PATH 갱신을 반영합니다.
-
-**PowerShell 스크립트 실행 정책 설정 (Windows 필수)**
-
-Windows PowerShell의 기본 정책은 `npm.ps1` 같은 스크립트 실행을 막습니다. **새 PowerShell 창**에서 다음을 실행해 정책을 완화하세요 (관리자 권한 불필요).
-
-```powershell
-Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
-```
-
-"예(Y)" 또는 Enter 입력. 한 번만 하면 됩니다.
-
-> `RemoteSigned`는 로컬 스크립트는 허용하고 원격 스크립트는 서명을 요구하는 표준 보안 정책입니다. `-Scope CurrentUser`로 시스템 전역이 아닌 현재 사용자에만 적용됩니다.
-{: .note }
-
-> winget이 동작하는 환경(Windows 11 또는 App Installer가 탑재된 Win10)에서는 PowerShell **관리자 권한**으로 한 번에 설치할 수 있습니다.
-> ```powershell
-> winget install -e --id OpenJS.NodeJS.LTS
-> winget install -e --id Git.Git
-> ```
-{: .note }
-
-#### 설치 — macOS
-
-[Homebrew](https://brew.sh)를 사용합니다. brew가 설치돼 있지 않다면 먼저:
+`nvm`을 통해 sudo 없이 사용자 영역에 Node를 설치합니다.
 
 ```bash
+# 시스템 업데이트 + 빌드 도구
+sudo apt update && sudo apt upgrade -y
+sudo apt install -y build-essential curl git
+
+# nvm 설치
+curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash
+source ~/.bashrc
+
+# Node 22 LTS 설치
+nvm install 22
+nvm alias default 22
+```
+
+#### macOS
+
+[Homebrew](https://brew.sh)를 쓰고 Node는 LTS로 핀합니다.
+
+```bash
+# brew 미설치라면 먼저 설치
 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-```
 
-**Node.js LTS 설치** (Node 22 LTS 기준):
-
-```bash
+# Node 22 LTS
 brew install node@22
 echo "export PATH=\"$(brew --prefix node@22)/bin:\$PATH\"" >> ~/.zshrc
 source ~/.zshrc
 ```
 
-> Homebrew의 `node@22`는 다른 node 버전과 충돌 방지를 위해 PATH에 자동 등록되지 않습니다(keg-only). 그래서 두 번째 줄로 PATH에 직접 추가합니다.
-> - **zsh 사용자(macOS 기본)**: 위 그대로
-> - **bash 사용자**: `~/.zshrc` → `~/.bash_profile`로 바꿔서 실행
-> - **다른 LTS 버전**: `node@22`를 `node@20` 등으로 교체. 사용 가능 목록은 `brew search node@`
+> Homebrew의 `node@22`는 keg-only라 PATH에 직접 등록해야 합니다 (위 두 번째 줄). bash 사용자는 `~/.zshrc` → `~/.bash_profile`로 바꿔주세요.
 {: .note }
 
-**Git 설치**:
-
-macOS는 보통 Xcode Command Line Tools와 함께 Git이 미리 설치돼 있습니다. `git --version`이 이미 떠 있으면 추가 설치 불필요. 없다면:
+Git이 안 떠 있으면(사전 과제에서 점검했지만 누락 시):
 
 ```bash
 brew install git
 ```
 
-#### 확인
-
-새 터미널 창(Windows는 PowerShell, macOS는 Terminal)에서:
+#### 확인 (공통)
 
 ```bash
-node --version    # v20.x.x 이상 (LTS 권장, Current도 동작)
+node --version    # v22.x.x
 npm --version     # 10.x.x 이상
-git --version     # git version 2.x.x
+git --version     # 2.x.x
 ```
 
-세 개 모두 버전이 떠야 다음 단계로 진행 가능합니다.
-
-> **`npm --version` 실행 시 "스크립트를 실행할 수 없습니다" 에러가 뜬다면** 위의 [PowerShell 스크립트 실행 정책 설정](#설치--windows) 단계를 건너뛰셨기 때문입니다. 그 명령을 먼저 실행하고 PowerShell 창을 새로 열어 다시 시도하세요.
-{: .warning }
+세 개 모두 정상 출력되면 다음 단계.
 
 ### 2-2. OpenClaw 설치
-
-OpenClaw 공식 설치 스크립트를 사용합니다.
-
-#### Windows
-
-PowerShell 새 창에서:
-
-```powershell
-powershell -c "irm https://openclaw.ai/install.ps1 | iex"
-```
-
-`irm`(Invoke-RestMethod)으로 [openclaw.ai](https://openclaw.ai)에서 `install.ps1`을 받아 `iex`(Invoke-Expression)로 실행합니다. 설치 진행 상황이 PowerShell에 출력됩니다.
-
-#### macOS / Linux
-
-터미널에서:
 
 ```bash
 curl -fsSL https://openclaw.ai/install.sh | bash
 ```
 
-`curl`로 [openclaw.ai](https://openclaw.ai)에서 `install.sh`를 받아 bash로 실행합니다.
+`curl`로 [openclaw.ai](https://openclaw.ai)에서 `install.sh`를 받아 bash로 실행합니다. 새 셸을 열거나 `source ~/.bashrc`로 PATH를 갱신한 뒤:
 
-#### 설치 확인
-
-설치 후 PowerShell 창을 **닫고 새로 열어서**:
-
-```powershell
+```bash
 openclaw --version
 ```
 
@@ -283,25 +230,93 @@ openclaw --version
 
 ### 2-3. 초기 설정 마법사
 
-```powershell
+OpenClaw 첫 사용 전, 모델·게이트웨이·기본 설정을 잡습니다.
+
+```bash
+openclaw setup --wizard
+```
+
+마법사가 단계별로 묻습니다. **다음 표 그대로** 답하면 됩니다.
+
+| 단계 | 선택 |
+|---|---|
+| Security disclaimer | **Yes** (개인 사용 동의) |
+| Setup mode | **QuickStart** |
+| Existing config 처리 | **Use existing values** (또는 처음이면 자동 진행) |
+| Model/auth provider | 검색창에 `google` 입력 → **Google** 선택 (`Google Vertex` 아님) |
+| API key | 사전 과제에서 받아둔 [Gemini API 키](00-pre-assignment.html#2-gemini-api-키-발급) 입력 |
+| Default model | 기본값(Gemini 2.5 Flash 등) 그대로 |
+| Channel | **Skip for now** (Day 4에서 Discord 연결) |
+| Web search | **DuckDuckGo Search (experimental)** (무료, 키 불필요) |
+| Skill 의존성 설치 | **Skip for now** (Day 2에서 메일 스킬 설치) |
+| 각종 API 키 (`goplaces`, `notion`, `openai-whisper-api`, `sag` 등) | 모두 **No** |
+| Hooks | **Skip for now** |
+| 미사용 스킬 비활성화 | **Yes** |
+| Gateway service runtime | (자동 — Node) |
+
+마법사 끝 무렵에 **OpenClaw Gateway가 백그라운드 서비스로 자동 등록·실행**됩니다.
+
+### 2-4. 검증 + 첫 에이전트
+
+#### Health check
+
+```bash
 openclaw doctor
 ```
 
-`doctor`는 누락된 의존성·설정을 점검합니다. `--fix` 옵션을 추가하면 자동으로 고칠 수 있는 항목을 처리합니다.
+대부분 ✅ 통과해야 합니다. (Update 안내가 보여도 무시 가능)
 
-### 2-4. 게이트웨이 시작
+#### 첫 에이전트 대화
 
-```powershell
-openclaw gateway start
+```bash
+openclaw
 ```
 
-> ⏳ VM 검증 후 갱신: 게이트웨이 시작 후 어떤 화면이 보이는지, 종료 방법, 백그라운드 실행 옵션 등.
+처음 진입 시 **Crestodian**(셋업 진단 에이전트)이 뜹니다. 메인 에이전트로 가려면 입력창에:
+
+```
+talk to agent
+```
+
+메인 에이전트로 전환되면 가벼운 인사:
+
+```
+안녕
+```
+
+응답이 정상으로 오면 **Day 1 완료**.
+
+> Crestodian으로 돌아가려면 `/crestodian`. 종료는 `/exit` 또는 Ctrl+C.
+{: .note }
+
+### 2-5. (선택) Pro 구독자용 Claude CLI 경로
+
+Anthropic Claude **Pro 구독자**라면 Gemini 대신 Claude를 쓸 수 있습니다. 별도 셋업이 필요해 강의 권장은 Gemini이며, 이 섹션은 어디까지나 **개인적 선택지**입니다.
+
+```bash
+# Claude Code CLI 설치
+npm install -g @anthropic-ai/claude-code
+claude --version
+
+# OAuth 인증 (브라우저 자동으로 열림 → Pro 계정 로그인 → 승인)
+claude
+```
+
+`claude` TUI에서 가벼운 인사 후 `/exit`. 그 다음 OpenClaw setup 마법사 다시 실행:
+
+```bash
+openclaw setup --wizard
+```
+
+마법사에서 **Update values** 선택 후:
+- Provider → **Anthropic (Claude CLI + API key)**
+- Auth method → **Claude CLI** (API key 아님)
+
+> Windows native(WSL2 사용 안 함)에서는 Node spawn `.cmd` 이슈로 Claude CLI가 동작하지 않습니다. 반드시 **WSL2 + Ubuntu 환경**에서 사용하세요.
 {: .warning }
 
-### 2-5. 첫 에이전트 실행
-
-> ⏳ VM 검증 후 갱신: 첫 명령(예: 인사 받기, 간단한 도구 사용) 시연.
-{: .warning }
+> Claude Pro 구독은 [claude.ai](https://claude.ai) 채팅 정액 요금이고 Anthropic API와는 별도 결제입니다. Claude CLI는 Pro 구독을 사용해 API 크레딧 없이 호출할 수 있는 우회 경로입니다.
+{: .note }
 
 ---
 
@@ -374,13 +389,6 @@ flowchart LR
 
 > 비유: 매뉴얼이 "프린터로 출력해라" 하면 직원은 실제로 프린터(도구)를 작동시킨다. 매뉴얼 = 스킬, 프린터 = 도구.
 {: .note }
-
-### clawhub 살펴보기
-
-`clawhub`은 OpenClaw 스킬·플러그인 카탈로그입니다.
-
-> ⏳ VM 검증 후 갱신: `clawhub` 명령 동작 확인 + 사용 가능 스킬 리스트 캡처.
-{: .warning }
 
 ---
 
