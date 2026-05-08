@@ -108,7 +108,6 @@ OpenClaw 2026.5.4은 약 40여 종의 LLM 제공자를 지원합니다. 강의�
 | 카테고리 | 대표 제공자 | 비용 | 적합한 경우 |
 |---|---|---|---|
 | 🌟 **강의 권장** | Google (Gemini) | 무료 (1,500/day) | 가장 단순, 빠른 시작 |
-| 🔐 **로컬 실행** | Ollama, LM Studio, vLLM | 무료 무제한 (전기료만) | 개인정보 외부 노출 0, 오프라인 동작 |
 | 💳 **보유 구독 활용** | Anthropic [Claude CLI](01-day1-setup.html#2-5-선택-pro-구독자용-claude-cli-경로), OpenAI Codex, GitHub Copilot | Pro·Plus 정액 | 이미 결제 중인 구독 재사용 |
 | 🌐 **종량제 메이저** | OpenAI (GPT), Anthropic (Claude API), Mistral AI, xAI (Grok) | $5+ 선불 크레딧 | 모델 품질 최상위, 비용 발생 |
 | ⚡ **저렴/빠른 종량제** | DeepSeek, Groq, Cerebras, Together AI | 매우 저렴 / 무료 한도 큼 | 가성비·속도 |
