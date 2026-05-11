@@ -181,20 +181,32 @@ secret-tool: The name org.freedesktop.secrets was not provided by any .service f
 → 비밀번호를 파일에 저장하고 config.toml에서 `cat`으로 조회합니다.
 
 ```bash
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# 👇 이 한 줄만 본인 네이버 앱 비밀번호로 변경 (12자리)
+NAVER_PASS="여기에12자리비밀번호"
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
 # 1) 비밀번호 파일 저장 (권한 600 — 본인만 읽기/쓰기)
 mkdir -p ~/.config/himalaya
-printf '%s' '앱비밀번호' > ~/.config/himalaya/.naver-pass
+printf '%s' "$NAVER_PASS" > ~/.config/himalaya/.naver-pass
 chmod 600 ~/.config/himalaya/.naver-pass
 
-# 2) 길이 검증 — 발급받은 비밀번호 글자 수와 일치해야 함
+# 2) 길이 검증 — 12 출력되면 정상
 cat ~/.config/himalaya/.naver-pass | wc -c
 
 # 3) config.toml의 secret-tool 명령을 cat으로 교체
-sed -i "s|secret-tool lookup account [a-z_]* service himalaya-[a-z]*|cat $HOME/.config/himalaya/.naver-pass|g" \
+sed -i "s|secret-tool lookup account [A-Za-z0-9_-]\+ service himalaya-[a-z]\+|cat $HOME/.config/himalaya/.naver-pass|g" \
     ~/.config/himalaya/config.toml
 
 # 4) 변경 확인 — 두 줄 모두 cat 명령으로 바뀌어야 정상
 grep "auth.command" ~/.config/himalaya/config.toml
+```
+
+기대 출력 (`grep` 결과):
+
+```
+backend.auth.command = "cat /home/<사용자>/.config/himalaya/.naver-pass"
+message.send.backend.auth.command = "cat /home/<사용자>/.config/himalaya/.naver-pass"
 ```
 
 > `printf '%s'`를 쓰면 끝에 줄바꿈이 안 붙어 정확히 비밀번호 글자수만 저장됩니다. 인터랙티브 입력 시 글자 누락·줄바꿈 추가가 자주 발생합니다.
