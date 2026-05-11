@@ -114,7 +114,7 @@ openclaw skills info himalaya # ✓ Ready, Visible to model: yes
 >
 > 1. **네이버 2단계 인증 활성화** — 보안 설정에서 ON
 > 2. **네이버 메일 IMAP/SMTP 사용 — 사용함** — 환경설정 → POP3/IMAP 설정 탭에서 체크 + **저장**
-> 3. **애플리케이션 비밀번호 발급** — "메일 (POP3/IMAP/SMTP)" 용도로 발급받은 16자리 (또는 12자리) 비밀번호 메모장에 복사해두기
+> 3. **애플리케이션 비밀번호 발급** — "메일 (POP3/IMAP/SMTP)" 용도로 발급받은 **12자리** 비밀번호 메모장에 복사해두기
 >
 > 위 세 가지 없이 마법사를 돌리면 인증이 무조건 실패합니다. 못 하셨으면 [기본 설정 페이지](00-pre-assignment.html#3-네이버-메일-imap--앱-비밀번호)부터 끝내고 돌아오세요.
 {: .important }
@@ -224,7 +224,7 @@ secret-tool lookup account naver service himalaya-imap | wc -c
 
 macOS는 Keychain을 자동 사용합니다. 마법사가 인증 단계에서 Keychain 옵션을 제시하면 그쪽으로 진행하면 됩니다. 또는 secret-tool 호환 방식으로 저장하려면 `libsecret`을 brew로 설치 후 위와 동일 명령.
 
-> 키링 lookup이 발급받은 비밀번호 길이와 다르면 (예: 16자리인데 14자리만 저장됨) 인터랙티브 입력 중 글자 누락이 일어난 것. 다시 `secret-tool clear` + `printf '%s' | secret-tool store`로 깨끗히 재저장하세요.
+> 키링 lookup이 발급받은 비밀번호 길이와 다르면 (예: 12자리인데 10자리만 저장됨) 인터랙티브 입력 중 글자 누락이 일어난 것. 다시 `secret-tool clear` + `printf '%s' | secret-tool store`로 깨끗히 재저장하세요.
 {: .warning }
 
 ---
