@@ -222,14 +222,22 @@ GUI 세션이 있는 환경(macOS, Ubuntu Desktop)은 키링을 사용할 수 �
 # libsecret-tools 미설치 시
 sudo apt install -y libsecret-tools
 
-# IMAP·SMTP 비밀번호 저장 (naver는 마법사에서 정한 Account name으로 교체)
-printf '%s' '앱비밀번호' | secret-tool store --label="himalaya naver imap" \
-    account naver service himalaya-imap
-printf '%s' '앱비밀번호' | secret-tool store --label="himalaya naver smtp" \
-    account naver service himalaya-smtp
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# 👇 이 한 줄만 본인 Account name으로 변경
+ACCOUNT_NAME="naver"
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+# 이하는 그대로 복사·실행하면 됩니다.
+printf '%s' '앱비밀번호' | secret-tool store \
+    --label="himalaya $ACCOUNT_NAME imap" \
+    account "$ACCOUNT_NAME" service himalaya-imap
+
+printf '%s' '앱비밀번호' | secret-tool store \
+    --label="himalaya $ACCOUNT_NAME smtp" \
+    account "$ACCOUNT_NAME" service himalaya-smtp
 
 # 길이 검증 (12 출력되면 정상)
-secret-tool lookup account naver service himalaya-imap | wc -c
+secret-tool lookup account "$ACCOUNT_NAME" service himalaya-imap | wc -c
 ```
 
 #### macOS
@@ -323,12 +331,16 @@ sed -i 's|encryption.type = "none"|encryption.type = "tls"|g' ~/.config/himalaya
 인터랙티브 입력 시 클립보드 복사가 일부 글자만 들어가는 케이스. `printf '%s'`로 다시 저장:
 
 ```bash
-secret-tool clear account naver service himalaya-imap
-printf '%s' '앱비밀번호' | secret-tool store --label="himalaya naver imap" \
-    account naver service himalaya-imap
+# 👇 본인 Account name으로 변경
+ACCOUNT_NAME="naver"
 
-# 길이 재확인
-secret-tool lookup account naver service himalaya-imap | wc -c
+secret-tool clear account "$ACCOUNT_NAME" service himalaya-imap
+printf '%s' '앱비밀번호' | secret-tool store \
+    --label="himalaya $ACCOUNT_NAME imap" \
+    account "$ACCOUNT_NAME" service himalaya-imap
+
+# 길이 재확인 (12 출력되면 정상)
+secret-tool lookup account "$ACCOUNT_NAME" service himalaya-imap | wc -c
 ```
 
 ---
