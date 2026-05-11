@@ -206,17 +206,29 @@ GUI 세션이 있는 환경(macOS, Ubuntu Desktop)은 키링을 사용할 수 �
 
 #### Linux Desktop
 
+> **⚠️ `account <이름>` 값은 마법사에서 정한 Account name과 정확히 일치해야 합니다.**
+> 마법사가 자동 생성한 `~/.config/himalaya/config.toml`에는
+> `backend.auth.command = "secret-tool lookup account <이름> service himalaya-imap"`
+> 형태로 들어가 있고, secret-tool로 저장할 때도 같은 `<이름>`을 써야 조회가 됩니다.
+>
+> 본인 config의 실제 이름 확인:
+> ```bash
+> grep auth.command ~/.config/himalaya/config.toml
+> ```
+> 아래 예시에선 Account name을 `naver`로 가정합니다. 다른 이름(예: `naver_linux`, `personal` 등)을 쓰셨다면 명령의 `naver` 부분을 본인 이름으로 바꿔 실행하세요.
+{: .important }
+
 ```bash
 # libsecret-tools 미설치 시
 sudo apt install -y libsecret-tools
 
-# IMAP·SMTP 비밀번호 저장
+# IMAP·SMTP 비밀번호 저장 (naver는 마법사에서 정한 Account name으로 교체)
 printf '%s' '앱비밀번호' | secret-tool store --label="himalaya naver imap" \
     account naver service himalaya-imap
 printf '%s' '앱비밀번호' | secret-tool store --label="himalaya naver smtp" \
     account naver service himalaya-smtp
 
-# 길이 검증
+# 길이 검증 (12 출력되면 정상)
 secret-tool lookup account naver service himalaya-imap | wc -c
 ```
 
