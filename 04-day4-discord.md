@@ -153,7 +153,7 @@ EOF
 
 ```bash
 source ~/.bashrc
-echo "토큰: ${DISCORD_BOT_TOKEN:0:10}..."
+echo "token: ${DISCORD_BOT_TOKEN:0:10}..."
 echo "webhook: ${DISCORD_WEBHOOK_URL:0:40}..."
 ```
 
