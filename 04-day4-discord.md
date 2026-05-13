@@ -18,7 +18,7 @@ nav_order: 6
 
 ## 학습 목표
 
-- Discord 채널을 OpenClaw에 1급 채널로 등록한다
+- Discord 채널을 OpenClaw의 정식 입출력 통로로 등록한다
 - 봇 토큰을 셸 재시작 후에도 자동 로드되게 영속화한다
 - Discord webhook을 발급해 Day 3에서 만든 cron 결과를 채널로 자동 알림 받는다
 - Discord 채널 안에서 자연어로 메일 조회·요약을 처리한다
@@ -48,7 +48,7 @@ nav_order: 6
 
 ## Block 1: Discord 채널 등록 + 토큰·webhook 영속화
 
-### 왜 "1급 채널"인가
+### 왜 Discord 채널을 직접 등록하는가
 
 지금까지 강의에서 OpenClaw 에이전트와 대화한 곳은 모두 터미널이었습니다. Day 4에서는 같은 에이전트가 **Discord 채널 자체를 입출력 통로**로 갖게 됩니다. 메일·cron 같은 도구를 부르는 두뇌는 그대로, **앞단의 대화창만 Discord로** 바뀌는 구조입니다.
 
@@ -392,7 +392,7 @@ crontab 갱신 완료
 flowchart LR
     D1[Day 1<br/>OpenClaw 설치<br/>첫 에이전트] --> D2[Day 2<br/>네이버 메일<br/>연동]
     D2 --> D3[Day 3<br/>분류 스크립트<br/>+ crontab<br/>+ SKILL.md]
-    D3 --> D4[Day 4<br/>Discord 1급 채널<br/>대화형 비서]
+    D3 --> D4[Day 4<br/>Discord 채널 통합<br/>대화형 비서]
     D4 --> Final[(나만의<br/>메일 비서)]
     style Final fill:#fbb,stroke:#a33,color:#000
 ```
