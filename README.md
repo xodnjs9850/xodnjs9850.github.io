@@ -12,7 +12,7 @@
 - `01-day1-setup.md` — Day 1 환경 셋업
 - `02-day2-mail.md` — Day 2 네이버 메일 연동
 - `03-day3-cron.md` — Day 3 스팸 분류 + 자동화 (cron)
-- (이후 Day 4 추가 예정)
+- `04-day4-discord.md` — Day 4 Discord 연결 + 대화형 비서
 
 ## 로컬 미리보기 (선택)
 
