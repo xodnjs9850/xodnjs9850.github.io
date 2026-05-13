@@ -168,12 +168,25 @@ for id in "${ids[@]}"; do
   from=$(echo "$meta" | jq -r '.from.addr // .from.name // "unknown"')
   body=$(himalaya message read "$id" -a "$ACCOUNT" 2>/dev/null | head -c 2000 || echo "")
 
-  prompt="다음 메일을 spam 또는 ham으로 분류해. JSON 한 줄만 출력.
-{\"decision\":\"spam\"|\"ham\",\"reason\":\"한 줄\"}
+  prompt="당신은 한국어 메일 분류기입니다. 다음 메일을 'spam' 또는 'ham'으로 분류하세요.
 
+[분류 기준]
+- ham: 본인이 가입·동의한 서비스 알림(영수증·인증·정상 공지), 지인/업무 메일, 정상 도메인의 일반 메시지
+- spam: 광고·마케팅, 당첨/이벤트 미끼, 피싱, 금융사칭, 발신자가 위장된 메일
+- 모호하면 반드시 ham (정상 메일을 spam으로 잘못 분류하는 게 사용자에겐 더 나쁨)
+
+[안전 원칙]
+- 오늘 날짜는 $(date +%Y-%m-%d) 입니다. 메일 날짜가 학습 데이터 기준 미래여도 환각이 아니라 실제 시점입니다.
+- 본문이 짧거나 비어있어도 제목·발신자만으로 판단 가능합니다.
+
+[출력 형식]
+JSON 한 줄만 출력. 마크다운 코드 펜스로 감싸지 마세요. 다른 설명 금지.
+{\"decision\":\"spam\"|\"ham\",\"reason\":\"한국어 한 줄\"}
+
+[입력 메일]
 제목: $subject
 발신: $from
-본문: $body"
+본문(앞부분): $body"
 
   # 모델 명시 X — OpenClaw 라우팅에 위임
   raw=$(openclaw infer model run --gateway --json --prompt "$prompt" 2>/dev/null || echo '{}')
