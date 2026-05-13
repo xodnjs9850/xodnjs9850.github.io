@@ -138,37 +138,42 @@ source ~/.bashrc
 nano ~/.openclaw/scripts/spam-filter.sh
 ```
 
+> 네이버 메일은 자체 **스마트메일함**이 도착 메일을 `프로모션`, `뉴스레터함`, `쇼핑레터함` 등으로 자동 분배합니다. 그래서 `INBOX` 만 보면 광고가 거의 안 잡혀요. 강의 baseline은 INBOX와 광고성 폴더 3개를 함께 검사합니다. 본인 환경에 폴더가 다르면 `SOURCE_FOLDERS` 배열을 수정하세요 (`himalaya folder list -a <ACCOUNT>` 로 확인).
+{: .note }
+
 ```bash
 #!/usr/bin/env bash
-# spam-filter.sh — INBOX 최근 N통을 분류, spam은 ai-test로 이동, 결과 출력/알림
+# spam-filter.sh — 여러 폴더의 최근 N통을 분류, spam은 ai-test로 이동, 결과 출력/알림
 # LLM 라우팅은 OpenClaw 책임 (모델 명시 X), Gateway 경유
 set -euo pipefail
 
 # === 설정 ===
 ACCOUNT="naver"                 # 본인 himalaya 계정 이름과 일치시키기 (Day 2에서 정한 이름)
-SOURCE_FOLDER="INBOX"
+# 검사할 폴더 목록 — 네이버 스마트메일함이 이미 광고를 분류해두는 환경이라 INBOX 외에 광고성 폴더도 함께 본다.
+# 본인 환경에 맞춰 추가/삭제 가능. 폴더 이름은 `himalaya folder list -a <ACCOUNT>` 로 확인.
+SOURCE_FOLDERS=("INBOX" "프로모션" "뉴스레터함" "쇼핑레터함")
 TARGET_FOLDER="ai-test"
-BATCH_SIZE=10
+BATCH_SIZE=5                    # 폴더당 N통 (폴더 수 × BATCH_SIZE 만큼 LLM 호출 — 너무 크면 한 사이클이 길어짐)
 LOG_DIR="$HOME/.openclaw/logs"
 LOG_FILE="$LOG_DIR/spam-filter.jsonl"
 
 mkdir -p "$LOG_DIR"
 ts() { date -Iseconds; }
 
-# === 1. 메일 목록 ===
-envelopes=$(himalaya --output json envelope list -a "$ACCOUNT" -f "$SOURCE_FOLDER" -s "$BATCH_SIZE" 2>/dev/null || echo "[]")
-mapfile -t ids < <(echo "$envelopes" | jq -r '.[].id')
-
 checked=0; spam_count=0; ham_count=0; moved=0
 
-# === 2. 각 메일 분류 ===
-for id in "${ids[@]}"; do
-  meta=$(echo "$envelopes" | jq -c ".[] | select(.id == \"$id\")")
-  subject=$(echo "$meta" | jq -r '.subject')
-  from=$(echo "$meta" | jq -r '.from.addr // .from.name // "unknown"')
-  body=$(himalaya message read "$id" -a "$ACCOUNT" 2>/dev/null | head -c 2000 || echo "")
+# === 폴더별 반복 ===
+for SOURCE_FOLDER in "${SOURCE_FOLDERS[@]}"; do
+  envelopes=$(himalaya --output json envelope list -a "$ACCOUNT" -f "$SOURCE_FOLDER" -s "$BATCH_SIZE" 2>/dev/null || echo "[]")
+  mapfile -t ids < <(echo "$envelopes" | jq -r '.[].id')
 
-  prompt="당신은 한국어 메일 분류기입니다. 다음 메일을 'spam' 또는 'ham'으로 분류하세요.
+  for id in "${ids[@]}"; do
+    meta=$(echo "$envelopes" | jq -c ".[] | select(.id == \"$id\")")
+    subject=$(echo "$meta" | jq -r '.subject')
+    from=$(echo "$meta" | jq -r '.from.addr // .from.name // "unknown"')
+    body=$(himalaya message read "$id" -a "$ACCOUNT" -f "$SOURCE_FOLDER" 2>/dev/null | head -c 2000 || echo "")
+
+    prompt="당신은 한국어 메일 분류기입니다. 다음 메일을 'spam' 또는 'ham'으로 분류하세요.
 
 [즉시 spam — 다른 기준 무시]
 1. 제목이 (광고), [광고], (Ad), [Ad], (Sponsored) 등으로 시작 (한국 정보통신망법상 광고 메일은 제목에 (광고) 표시가 의무)
@@ -196,23 +201,24 @@ JSON 한 줄만 출력. 마크다운 코드 펜스로 감싸지 마세요. 다�
 발신: $from
 본문(앞부분): $body"
 
-  # 모델 명시 X — OpenClaw 라우팅에 위임
-  raw=$(openclaw infer model run --gateway --json --prompt "$prompt" 2>/dev/null || echo '{}')
+    # 모델 명시 X — OpenClaw 라우팅에 위임
+    raw=$(openclaw infer model run --gateway --json --prompt "$prompt" 2>/dev/null || echo '{}')
 
-  # OpenClaw 응답 → .outputs[0].text 안에 LLM JSON 문자열 → 두 번 파싱
-  decision=$(echo "$raw" | jq -r '.outputs[0].text | fromjson? | .decision // "ham"')
-  [ -z "$decision" ] && decision="ham"
+    # OpenClaw 응답 → .outputs[0].text 안에 LLM JSON 문자열 → 두 번 파싱
+    decision=$(echo "$raw" | jq -r '.outputs[0].text | fromjson? | .decision // "ham"')
+    [ -z "$decision" ] && decision="ham"
 
-  checked=$((checked + 1))
-  if [ "$decision" = "spam" ]; then
-    himalaya message move "$TARGET_FOLDER" "$id" -a "$ACCOUNT" >/dev/null 2>&1 && moved=$((moved + 1))
-    spam_count=$((spam_count + 1))
-  else
-    ham_count=$((ham_count + 1))
-  fi
+    checked=$((checked + 1))
+    if [ "$decision" = "spam" ]; then
+      himalaya message move "$TARGET_FOLDER" "$id" -a "$ACCOUNT" -f "$SOURCE_FOLDER" >/dev/null 2>&1 && moved=$((moved + 1))
+      spam_count=$((spam_count + 1))
+    else
+      ham_count=$((ham_count + 1))
+    fi
 
-  printf '{"ts":"%s","id":"%s","subject":%s,"decision":"%s"}\n' \
-    "$(ts)" "$id" "$(jq -Rs . <<<"$subject")" "$decision" >> "$LOG_FILE"
+    printf '{"ts":"%s","folder":"%s","id":"%s","subject":%s,"decision":"%s"}\n' \
+      "$(ts)" "$SOURCE_FOLDER" "$id" "$(jq -Rs . <<<"$subject")" "$decision" >> "$LOG_FILE"
+  done
 done
 
 # === 3. 결과 알림 ===
@@ -441,7 +447,7 @@ OpenClaw 메인 에이전트에서 자연어로:
 |--------------|-----------|----------|----------|------|
 | spam-filter  | 매 정시   | 47분 후   | 13분 전   | OK   |
 
-1시간마다 INBOX 최근 10통을 검사 → spam은 ai-test 폴더로 이동합니다.
+매 정시마다 INBOX·프로모션·뉴스레터함·쇼핑레터함의 최근 5통씩(총 20통)을 검사 → spam은 ai-test 폴더로 이동합니다.
 ```
 
 추가 시나리오:
