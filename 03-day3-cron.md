@@ -20,16 +20,17 @@ nav_order: 5
 
 - 스팸 분류 프롬프트를 설계해 LLM에 단일 메일 판단을 맡긴다
 - 메일 이동 + 안전장치(`ai-test` 폴더, ham 우선)를 적용한다
+- 분류·이동·로그를 한 번에 처리하는 **bash 스크립트**를 작성한다
+- Ubuntu **crontab** 으로 주기적 자동 실행을 등록한다
 - **자연어로 작성된 `SKILL.md`가 에이전트의 새 능력이 되는 패턴**을 직접 만들어본다
-- OpenClaw cron으로 자동 분류 파이프라인을 등록하고 운영한다
 
 ## 시간표
 
 | 시간 | 블록 | 내용 |
 |---|---|---|
 | 0:00–0:50 | 1 | 스팸 분류 개념 + 안전장치 / 단일 메일 수동 분류·이동 |
-| 1:00–1:50 | 2 | 사전 셋업 (권한 패치) / `openclaw-cron` SKILL.md 작성 |
-| 2:00–2:50 | 3 | cron 작업 등록 / 자연어로 자동화 관리 |
+| 1:00–1:50 | 2 | 분류 스크립트(`spam-filter.sh`) 작성 + 수동 실행 검증 |
+| 2:00–2:50 | 3 | Ubuntu crontab 등록 / `linux-cron` SKILL.md 작성 / 자연어로 자동화 관리 |
 | 3:00–4:00 | Q&A | 트러블슈팅 + 자유 질의응답 |
 
 ---
@@ -87,456 +88,434 @@ himalaya envelope list -f ai-test
 
 ---
 
-## Block 2: 자동화를 위한 사전 셋업
+## Block 2: 분류 스크립트 작성 + 수동 검증
 
-### 2-1. OpenClaw 권한 패치 (필수)
+Block 1의 한 통 분류를 **여러 통씩, 결정적으로** 처리하도록 bash 스크립트로 옮깁니다. LLM은 분류만, 셸이 이동·로깅을 직접 수행하므로 LLM의 환각이나 누락에 영향을 받지 않습니다.
 
-OpenClaw 2026.5.x에는 **단일 사용자 페어링 시 권한 부족** 회귀 버그가 있습니다 ([Issue #74484](https://github.com/openclaw/openclaw/issues/74484), [#29387](https://github.com/openclaw/openclaw/issues/29387)). 기본 페어링된 CLI device가 `operator.read`만 받기 때문에 cron 등록·관리(`operator.write`·`operator.pairing` 필요)가 막힙니다.
+### 왜 OpenClaw cron이 아니라 Ubuntu crontab인가
 
-> ⚠️ 이 패치 없이는 `openclaw cron add` 가 "scope upgrade pending approval" 에러로 영원히 막힙니다. 반드시 먼저 적용하세요.
+OpenClaw 자체 cron(`openclaw cron add`)도 있지만, 강의 경험상 다음 이유로 **OS의 표준 cron** 을 권장합니다:
+
+| | OpenClaw cron | Ubuntu crontab (권장) |
+|---|---|---|
+| 인증·세션 | 격리 세션이 매번 새로 인증을 시도 (실패 잦음) | 사용자 셸 환경 그대로 상속 (안정적) |
+| 디버깅 | 격리 세션 추상화 안에서 일어남 | 스크립트를 수동 실행하면 100% 동일 재현 |
+| LLM provider 한도/billing 영향 | cron이 직접 LLM 호출 → 한도/결제 이슈 즉시 노출 | 스크립트가 OpenClaw를 한 단계 거쳐 호출 → 라우팅 위임 |
+| 학생 평생 자산 | OpenClaw 종료 시 사용 불가 | Linux 시스템 표준, 어디서나 쓸 수 있는 지식 |
+
+OpenClaw의 역할은 **LLM 라우터 + 채널 통합 + 스킬 정의**에 집중하고, "언제 돌릴지" 는 OS 자체 기능에 위임하는 분업이 깔끔합니다.
+
+### 2-1. 스크립트 폴더 + Discord webhook 자리(선택) 준비
+
+```bash
+mkdir -p ~/.openclaw/scripts ~/.openclaw/logs ~/.openclaw/secrets
+```
+
+Discord 알림은 Day 4에서 본격 다룹니다. 이번 Day는 **터미널 출력**만으로 진행하되, 스크립트는 webhook URL이 환경변수에 있으면 자동으로 Discord로 보내도록 만들어둡니다.
+
+```bash
+# Day 4에서 채울 자리만 만들기 (지금은 비워둠)
+touch ~/.openclaw/secrets/discord.env
+chmod 600 ~/.openclaw/secrets/discord.env
+```
+
+이미 [Day 1](01-day1-setup.html) 등에서 `~/.bashrc` 에 secrets source 라인이 들어가 있다면 그대로 사용. 아직 없다면:
+
+```bash
+cat >> ~/.bashrc <<'EOF'
+
+# OpenClaw secrets
+[ -f ~/.openclaw/secrets/discord.env ] && . ~/.openclaw/secrets/discord.env
+EOF
+source ~/.bashrc
+```
+
+### 2-2. `spam-filter.sh` 작성
+
+`~/.openclaw/scripts/spam-filter.sh` 파일에 아래 내용을 넣습니다. `nano` 로 열어 그대로 붙여넣기 + 저장(`Ctrl+O`, Enter, `Ctrl+X`):
+
+```bash
+nano ~/.openclaw/scripts/spam-filter.sh
+```
+
+```bash
+#!/usr/bin/env bash
+# spam-filter.sh — INBOX 최근 N통을 분류, spam은 ai-test로 이동, 결과 출력/알림
+# LLM 라우팅은 OpenClaw 책임 (모델 명시 X), Gateway 경유
+set -euo pipefail
+
+# === 설정 ===
+ACCOUNT="naver"                 # 본인 himalaya 계정 이름과 일치시키기 (Day 2에서 정한 이름)
+SOURCE_FOLDER="INBOX"
+TARGET_FOLDER="ai-test"
+BATCH_SIZE=10
+LOG_DIR="$HOME/.openclaw/logs"
+LOG_FILE="$LOG_DIR/spam-filter.jsonl"
+
+mkdir -p "$LOG_DIR"
+ts() { date -Iseconds; }
+
+# === 1. 메일 목록 ===
+envelopes=$(himalaya --output json envelope list -a "$ACCOUNT" -f "$SOURCE_FOLDER" -s "$BATCH_SIZE" 2>/dev/null || echo "[]")
+mapfile -t ids < <(echo "$envelopes" | jq -r '.[].id')
+
+checked=0; spam_count=0; ham_count=0; moved=0
+
+# === 2. 각 메일 분류 ===
+for id in "${ids[@]}"; do
+  meta=$(echo "$envelopes" | jq -c ".[] | select(.id == \"$id\")")
+  subject=$(echo "$meta" | jq -r '.subject')
+  from=$(echo "$meta" | jq -r '.from.addr // .from.name // "unknown"')
+  body=$(himalaya message read "$id" -a "$ACCOUNT" 2>/dev/null | head -c 2000 || echo "")
+
+  prompt="다음 메일을 spam 또는 ham으로 분류해. JSON 한 줄만 출력.
+{\"decision\":\"spam\"|\"ham\",\"reason\":\"한 줄\"}
+
+제목: $subject
+발신: $from
+본문: $body"
+
+  # 모델 명시 X — OpenClaw 라우팅에 위임
+  raw=$(openclaw infer model run --gateway --json --prompt "$prompt" 2>/dev/null || echo '{}')
+
+  # OpenClaw 응답 → .outputs[0].text 안에 LLM JSON 문자열 → 두 번 파싱
+  decision=$(echo "$raw" | jq -r '.outputs[0].text | fromjson? | .decision // "ham"')
+  [ -z "$decision" ] && decision="ham"
+
+  checked=$((checked + 1))
+  if [ "$decision" = "spam" ]; then
+    himalaya message move "$TARGET_FOLDER" "$id" -a "$ACCOUNT" >/dev/null 2>&1 && moved=$((moved + 1))
+    spam_count=$((spam_count + 1))
+  else
+    ham_count=$((ham_count + 1))
+  fi
+
+  printf '{"ts":"%s","id":"%s","subject":%s,"decision":"%s"}\n' \
+    "$(ts)" "$id" "$(jq -Rs . <<<"$subject")" "$decision" >> "$LOG_FILE"
+done
+
+# === 3. 결과 알림 ===
+msg=$(printf '**[spam-filter]** %s\n검사 %d통 / 스팸 %d / ham %d\n이동 완료: %d통 → `%s`' \
+  "$(date '+%Y-%m-%d %H:%M')" "$checked" "$spam_count" "$ham_count" "$moved" "$TARGET_FOLDER")
+
+# webhook URL이 있으면 Discord로, 없으면 터미널에 출력
+if [ -n "${DISCORD_WEBHOOK_URL:-}" ]; then
+  payload=$(jq -nc --arg c "$msg" '{content: $c}')
+  curl -sS -X POST -H "Content-Type: application/json" -d "$payload" "$DISCORD_WEBHOOK_URL" >/dev/null
+else
+  echo "$msg"
+fi
+```
+
+> 스크립트 안의 `ACCOUNT="naver"` 는 본인이 Day 2 himalaya 마법사에서 정한 **계정 이름**과 정확히 일치해야 합니다. 다르면 `himalaya account list` 로 확인 후 수정.
 {: .warning }
 
-#### 패치 절차
+권한 부여:
 
 ```bash
-# jq 미설치 시
-sudo apt install -y jq
-
-# 백업
-cp ~/.openclaw/devices/paired.json ~/.openclaw/devices/paired.json.bak
-
-# 모든 권한 부여 — 3곳 모두 (scopes, approvedScopes, tokens.operator.scopes)
-SCOPES='["operator.read", "operator.write", "operator.admin", "operator.pairing"]'
-jq --argjson scopes "$SCOPES" '
-  .[] |= (
-    .scopes = $scopes
-    | .approvedScopes = $scopes
-    | .tokens.operator.scopes = $scopes
-  )
-' ~/.openclaw/devices/paired.json > /tmp/paired.json
-mv /tmp/paired.json ~/.openclaw/devices/paired.json
-
-# 게이트웨이가 덮어쓰지 못하게 readonly 잠금
-chmod 444 ~/.openclaw/devices/paired.json
-
-# 게이트웨이 재시작
-systemctl --user restart openclaw-gateway
-sleep 3
-
-# 검증
-openclaw devices list
+chmod +x ~/.openclaw/scripts/spam-filter.sh
 ```
 
-Paired 행의 Scopes 컬럼에 4개 권한이 모두 보여야 정상.
+### 2-3. CRLF 함정 회피
 
-> `chmod 444` 잠금이 핵심입니다. 안 하면 게이트웨이가 다시 `operator.read`만 남기게 덮어씁니다.
-{: .important }
-
-### 2-2. `openclaw-cron` SKILL.md 작성
-
-여기가 Day 3의 백미입니다 — **자연어 매뉴얼**로 에이전트의 새 능력을 정의합니다.
+Windows 측에서 스크립트를 편집해 WSL로 가져온 경우 줄바꿈이 `\r\n` 으로 저장돼 `env: 'bash\r': No such file or directory` 같은 에러가 납니다. **WSL Ubuntu 안에서 `nano` 로 직접 작성**하면 이 문제가 없습니다. 만일 발생하면:
 
 ```bash
-mkdir -p ~/.openclaw/workspace/skills/openclaw-cron
-nano ~/.openclaw/workspace/skills/openclaw-cron/SKILL.md
+sed -i 's/\r$//' ~/.openclaw/scripts/spam-filter.sh
 ```
 
-다음 내용 붙여넣기 (Ctrl+O, Enter, Ctrl+X로 저장):
+### 2-4. 수동 실행
+
+OpenClaw Gateway가 떠 있는 상태에서 (Day 1에서 띄워둔 상태 그대로):
+
+```bash
+~/.openclaw/scripts/spam-filter.sh
+```
+
+한 통당 5~15초 정도 LLM 호출이 일어나므로 10통이면 1~2분 소요. 끝나면 터미널에:
 
 ```
+**[spam-filter]** 2026-05-13 10:38
+검사 10통 / 스팸 1 / ham 9
+이동 완료: 1통 → ai-test
+```
+
+같은 줄이 출력됩니다. 로그 파일에는 한 통씩 결정 결과가 JSONL 형태로 누적:
+
+```bash
+tail -n 10 ~/.openclaw/logs/spam-filter.jsonl
+```
+
+```json
+{"ts":"2026-05-13T10:38:14+09:00","id":"23279","subject":"\"디즈니+ 약관 및 정책 변경 안내\"","decision":"ham"}
+{"ts":"2026-05-13T10:38:25+09:00","id":"23277","subject":"\"...휴면회원 개인정보 파기 예정 안내\"","decision":"ham"}
+...
+```
+
+### 2-5. 메일 상태 확인
+
+```bash
+himalaya envelope list -a naver -s 5            # INBOX
+himalaya envelope list -a naver -f ai-test -s 5 # 이동된 메일
+```
+
+spam으로 판정된 메일이 ai-test 폴더에 도착했으면 성공.
+
 ---
-name: openclaw-cron
-description: Manage OpenClaw gateway cron jobs — list, show, create, run, disable, enable, delete schedules. Use whenever the user asks about schedules, cron, recurring tasks, automation timing, 스케줄, or background jobs.
-metadata:
-  openclaw:
-    emoji: "⏰"
-    requires:
-      bins:
-        - openclaw
----
 
-# OpenClaw Cron 스킬
+## Block 3: Ubuntu crontab + `linux-cron` SKILL.md
 
-OpenClaw 게이트웨이의 cron 레지스트리를 관리한다. MCP 도구로는 노출되지 않으므로 모든 동작은 `openclaw cron` CLI를 Bash로 호출해서 수행한다.
+### 3-1. crontab 등록 — 1시간마다 자동 실행
 
-## When to use
+```bash
+crontab -e
+```
 
-사용자가 다음과 같이 요청할 때:
-- "스케줄 확인", "등록된 자동화 보여줘", "cron 작업 목록"
-- "5분마다 X 해줘", "매시간 Y 실행"
-- "방금 자동화 어디까지 동작했어?"
-- "이 자동화 멈춰줘", "스케줄 삭제"
+기본 에디터(nano)가 열리면 맨 아래에 한 줄 추가:
 
-## Steps
+```
+0 * * * * BASH_ENV=$HOME/.openclaw/secrets/discord.env bash -lc '$HOME/.openclaw/scripts/spam-filter.sh' >> $HOME/.openclaw/logs/spam-filter.cron.log 2>&1
+```
 
-1. 사용자 의도를 아래 표의 intent 중 하나로 매핑한다.
-2. 해당 CLI 명령을 Bash로 실행한다.
-3. 결과를 사용자에게 보기 좋은 형식(표)으로 정리해 응답한다.
+- `0 * * * *` — 분=0, 시·일·월·요일 모두(`*`) 즉 **매 정시**
+- `BASH_ENV=...` — cron 은 비대화형 셸이라 `~/.bashrc` 가 자동 source 안 됨. 시크릿 파일을 직접 지정해서 환경변수 주입
+- `bash -lc` — 로그인 셸로 실행해 `PATH`(himalaya, openclaw, jq) 정상 로드
+- `>> ... 2>&1` — 표준 출력/에러를 cron 로그 파일로
 
-## CLI 명령 매핑
+저장 후 등록 확인:
 
-| intent | CLI |
+```bash
+crontab -l
+```
+
+위 한 줄이 그대로 보이면 완료. **다음 정시**(예: 11:00, 12:00 …)에 자동 실행됩니다.
+
+#### 다른 주기 표기
+
+| 사람말 | crontab |
 |---|---|
-| 등록된 모든 작업 목록 | openclaw cron list |
-| 특정 작업 상세 | openclaw cron show <ID> |
-| 새 작업 등록 | openclaw cron add --name <n> --every <duration> --session main --system-event "<프롬프트>" |
-| 즉시 실행 (디버그) | openclaw cron run <ID> |
-| 실행 이력 | openclaw cron runs --id <ID> --limit 10 |
-| 스케줄러 상태 | openclaw cron status |
-| 비활성화 / 활성화 | openclaw cron disable <ID> / openclaw cron enable <ID> |
-| 삭제 | openclaw cron rm <ID> |
+| 매 정시 (1시간마다) | `0 * * * *` |
+| 매 30분 | `*/30 * * * *` |
+| 매 15분 | `*/15 * * * *` |
+| 매 5분 | `*/5 * * * *` |
+| 매일 오전 9시 | `0 9 * * *` |
+| 평일 오전 9시만 | `0 9 * * 1-5` |
 
-## 응답 포맷
+### 3-2. 자동 사이클 검증
 
-목록·상세는 표 형식: Name, Schedule, Next, Last, Status, ID 컬럼.
-
-작업이 0건이면 "현재 등록된 스케줄 없음"만 답한다.
-
-새 작업 등록 성공 시 Job ID, Name, Schedule, Next run을 보여준다.
-
-## Rules
-
-- 같은 name으로 이미 등록된 작업이 있을 때 사용자가 또 등록 요청하면, 기존 것을 보여주고 덮어쓸지 확인한다.
-- delete/rm 전에는 항상 한 번 더 확인을 받는다.
-- 새 작업은 기본적으로 --session main으로 (사용자가 메인 세션에서 결과 보길 원할 가능성).
-
-## Constraints
-
-- 반복 cron은 7일 후 자동 만료된다. 갱신 필요 시 사용자에게 안내.
-
-## Don't
-
-- mcp__openclaw__subagents 또는 mcp__openclaw__sessions_list로 cron 상태를 추론하지 말 것. 그 도구들은 cron 레지스트리를 보지 못한다.
-- Claude Code 내장 CronCreate/CronList(.claude/scheduled_tasks.json)와 OpenClaw 게이트웨이 cron은 완전히 별개. 사용자가 "스케줄"이라고 하면 기본은 OpenClaw cron 기준.
-```
-
-#### 등록 확인
+다음 정시까지 기다린 후:
 
 ```bash
-openclaw skills info openclaw-cron
+tail -n 20 ~/.openclaw/logs/spam-filter.jsonl
 ```
 
-기대 출력:
-- `✓ Ready`
-- `Visible to model: yes` — 에이전트가 자동으로 이 스킬을 인식·사용 가능
-- Requirements: `✓ openclaw`
+새 분류 결과가 누적됐으면 cron이 정상 발화한 것. (스크립트가 침묵 운영이라 `spam-filter.cron.log` 가 비어 있을 수 있는데, 이는 정상입니다 — 결과는 JSONL 쪽에 들어가요.)
 
-게이트웨이 캐시 갱신:
+cron daemon 자체가 발화했는지 보고 싶다면:
 
 ```bash
+journalctl -u cron --since "today 00:00" | grep spam-filter | tail -5
+```
+
+`(<사용자>) CMD (BASH_ENV=... bash -lc '...')` 같은 줄이 보이면 OS 레벨에서 정확히 트리거된 것.
+
+### 3-3. `linux-cron` SKILL.md 작성 — Day 3의 백미
+
+여기서부터가 **OpenClaw 생태계의 핵심 가치**를 체험하는 부분입니다. 위에서 만든 crontab 운영을 봇이나 메인 에이전트가 **자연어로 처리**할 수 있도록 매뉴얼 한 장을 작성합니다.
+
+```bash
+mkdir -p ~/.openclaw/workspace/skills/linux-cron
+nano ~/.openclaw/workspace/skills/linux-cron/SKILL.md
+```
+
+내용:
+
+```
+---
+name: linux-cron
+description: Ubuntu crontab으로 메일 분류 cron(spam-filter) 운영. 스케줄 확인·주기 변경·수동 실행·로그 조회·삭제.
+---
+
+# linux-cron — Ubuntu crontab 운영 비서
+
+사용자의 메일 분류 자동화는 Ubuntu의 표준 crontab 으로 돌아갑니다.
+
+- 스크립트: $HOME/.openclaw/scripts/spam-filter.sh
+- 분류 로그 (JSONL): $HOME/.openclaw/logs/spam-filter.jsonl
+- cron stdout 로그: $HOME/.openclaw/logs/spam-filter.cron.log
+
+## 언제 이 스킬을 사용하나
+
+다음 의도가 보이면:
+
+- 스케줄 조회 — "스케줄 확인", "cron 보여줘", "예약 알려줘"
+- 주기 변경 — "주기 1시간으로 바꿔줘", "더 자주 돌게", "30분마다"
+- 수동 실행 — "지금 돌려봐", "한번 실행해봐", "수동 실행"
+- 로그 조회 — "최근 분류 결과", "어떤 메일 옮겼어", "오늘 통계"
+- 삭제 — "자동 분류 멈춰", "cron 삭제"
+- 재등록 — "다시 등록해줘", "1시간마다 돌게 만들어"
+
+## 도구 매핑
+
+| 의도 | 명령 |
+|---|---|
+| 조회 | crontab -l |
+| 수동 실행 | bash $HOME/.openclaw/scripts/spam-filter.sh & |
+| 최근 분류 N건 | tail -n 20 $HOME/.openclaw/logs/spam-filter.jsonl |
+| 오늘 통계 | grep "$(date +%Y-%m-%d)" $HOME/.openclaw/logs/spam-filter.jsonl | jq -r .decision | sort | uniq -c |
+| 삭제 | crontab -l | grep -v spam-filter | crontab - |
+| 등록 (1시간 주기 기본) | (crontab -l 2>/dev/null | grep -v spam-filter; echo "0 * * * * BASH_ENV=$HOME/.openclaw/secrets/discord.env bash -lc '$HOME/.openclaw/scripts/spam-filter.sh' >> $HOME/.openclaw/logs/spam-filter.cron.log 2>&1") | crontab - |
+| 주기 변경 | 등록 명령에서 5필드 부분만 새 주기로 바꿔 재실행 |
+| daemon 실행 추적 | journalctl -u cron --since "today 00:00" | grep spam-filter | tail -10 |
+
+## 응답 형식
+
+표 + 친근한 한 줄 해설.
+
+## 규칙
+
+1. 변경 전 반드시 현재 상태를 보여주고 사용자 확인을 받는다.
+2. 수동 실행은 `&` 로 백그라운드 + "잠시 후 결과가 도착할 거예요" 안내.
+3. spam-filter 단어로 필터링한 줄만 수정/삭제. 다른 cron 줄은 건드리지 않는다.
+4. 시스템 cron(/etc/cron.*)은 만지지 않는다. 사용자 crontab 안에서만.
+5. cron.log 가 비어있어도 정상 — 실제 결과는 spam-filter.jsonl 에 누적.
+6. JSONL 로그를 사람 읽기 쉬운 표로 변환.
+```
+
+> SKILL.md를 다른 환경(예: Windows 메모장)에서 작성한 뒤 WSL로 가져왔다면 CRLF가 섞일 수 있어요. `sed -i 's/\r$//' ~/.openclaw/workspace/skills/linux-cron/SKILL.md` 로 정리.
+{: .warning }
+
+### 3-4. SKILL 인식 + 검증
+
+Gateway가 시작할 때 SKILL을 로드하므로 재시작:
+
+```bash
+# 백그라운드 모드
 systemctl --user restart openclaw-gateway
-sleep 3
+
+# 또는 foreground 모드면 해당 터미널에서 Ctrl+C 후 다시:
+openclaw gateway
 ```
 
-#### 스킬 동작 검증
-
-OpenClaw TUI 진입:
+스킬 상태 확인:
 
 ```bash
-openclaw
-# Crestodian → talk to agent
+openclaw skills info linux-cron
 ```
 
-자연어로 (이전 컨텍스트 없이):
+`Visible to model: yes` 가 보여야 정상.
+
+OpenClaw 메인 에이전트에서 자연어로:
 
 ```
-스케줄 확인
+스케줄 확인해줘
 ```
 
-에이전트가 자동으로 `openclaw cron list`를 호출해 표 형식으로 응답해야 정상.
-
-또는:
+응답 예시:
 
 ```
-스케줄 관련 명령어 목록 보여줘
+현재 스케줄
+
+| 작업         | 주기      | 다음 실행 | 최근 실행 | 상태 |
+|--------------|-----------|----------|----------|------|
+| spam-filter  | 매 정시   | 47분 후   | 13분 전   | OK   |
+
+1시간마다 INBOX 최근 10통을 검사 → spam은 ai-test 폴더로 이동합니다.
 ```
 
-→ SKILL.md의 명령 매핑이 그대로 표 형태로 출력.
+추가 시나리오:
+
+```
+오늘 분류 결과 통계 알려줘
+최근 분류 로그 보여줘
+지금 한번 실행해봐
+주기를 30분으로 바꿔줘
+```
+
+각 요청에 대해 에이전트가 SKILL.md의 명령 표를 보고 적절한 `crontab` / `tail` / `bash ... &` 호출을 만들어 실행합니다.
 
 > **이게 OpenClaw 생태계의 핵심 가치입니다.** 자연어로 매뉴얼을 작성하면 에이전트가 그 매뉴얼을 따른다 — 코드 없이 도구를 만들었습니다.
 {: .important }
 
 ---
 
-## Block 3: cron 자동 분류 등록
-
-### 3-1. 자연어로 등록 (권장)
-
-가장 OpenClaw다운 방식. TUI 메인 에이전트에:
-
-```
-spam-filter라는 이름으로 cron 작업 등록해줘. 5분마다 실행.
-작업 내용: INBOX 최근 메일 1~3통을 가져와서 spam 분류하고, spam이면 ai-test로 himalaya로 이동, 결과 한 줄 요약.
-세션은 main, 시스템 이벤트로 주입.
-```
-
-에이전트가 방금 만든 `openclaw-cron` 스킬을 사용해 적절한 `openclaw cron add` 명령을 만들고 실행합니다. 성공 시 Job ID와 함께 등록 결과 출력.
-
-### 3-2. CLI로 직접 등록 (대안)
-
-자연어가 어려우면:
-
-```bash
-openclaw cron add \
-  --name spam-filter \
-  --every 5m \
-  --session main \
-  --system-event "INBOX 최근 메일 1~3통 spam 분류, spam이면 ai-test로 himalaya로 이동, 결과 한 줄 요약"
-```
-
----
-
-## Block 4: 운영 + 검증
-
-### 등록 확인
-
-```
-스케줄 확인
-```
-
-`spam-filter` 1건이 every 5m, idle 상태로 보여야 정상.
-
-### 즉시 실행 (5분 기다리기 싫으면)
-
-```
-spam-filter를 지금 한 번 실행해줘
-```
-
-또는:
-
-```bash
-openclaw cron run <JOB_ID>
-```
-
-### 발화 이력
-
-```
-spam-filter의 최근 실행 이력 5건 보여줘
-```
-
-또는:
-
-```bash
-openclaw cron runs --id <JOB_ID> --limit 5
-```
-
-### 메일 상태 확인
-
-```bash
-himalaya envelope list | head -5      # INBOX
-himalaya envelope list -f ai-test     # 이동된 메일
-```
-
-새로 spam으로 분류·이동된 메일이 있으면 자동화 정상 동작.
-
-### 비활성화 / 삭제
-
-```
-spam-filter 잠시 꺼줘    # disable
-spam-filter 다시 켜줘    # enable
-spam-filter 삭제해줘     # rm (에이전트가 한 번 더 확인 요청)
-```
-
-또는 CLI:
-
-```bash
-openclaw cron disable <ID>
-openclaw cron enable <ID>
-openclaw cron rm <ID>
-```
-
----
-
 ## 트러블슈팅
 
-### "scope upgrade pending approval" 영원히 막힘
+### `env: 'bash\r': No such file or directory`
 
-OpenClaw 회귀 버그. [Block 2-1](#2-1-openclaw-권한-패치-필수)의 paired.json 패치를 적용했는지 확인. `chmod 444` 잊지 마세요 — 안 하면 게이트웨이가 다시 덮어씁니다.
-
-### cron 등록은 됐는데 발화 안 됨
+Windows 줄바꿈(CRLF)이 스크립트에 섞인 것. WSL Ubuntu 안에서 직접 `nano` 로 작성하는 게 가장 안전. 이미 발생했다면:
 
 ```bash
-openclaw cron status
+sed -i 's/\r$//' ~/.openclaw/scripts/spam-filter.sh
 ```
 
-`enabled: true` 인지 확인. 아니면:
+### 스크립트가 멈춘 채로 응답 없음
+
+`openclaw infer model run` 호출이 Gateway 통신을 대기 중일 가능성. **Gateway가 떠 있는지 먼저 확인**:
 
 ```bash
-openclaw config set cron.enabled true
-systemctl --user restart openclaw-gateway
+ps aux | grep "openclaw gateway" | grep -v grep
 ```
 
-게이트웨이 자체가 죽었으면 cron도 안 발화:
+안 떠 있으면 별도 터미널에서 `openclaw gateway` 실행. cron 자동 실행 시점에도 Gateway가 떠 있어야 정상 동작합니다.
+
+### `Model override "..." is not allowed for agent "main"`
+
+스크립트가 `--model <provider/model>` 로 모델을 명시적으로 지정해 메인 에이전트의 허용 모델과 충돌. 스크립트에서 `--model` 옵션을 빼고 OpenClaw 라우팅에 위임하세요. 현재 본문 스크립트는 이미 그렇게 작성돼 있습니다.
+
+### `himalaya envelope list` 가 0건을 돌려줌
+
+- `ACCOUNT` 변수 값이 `himalaya account list` 의 실제 이름과 일치하는지
+- 폴더 이름이 `INBOX` 가 맞는지 (`himalaya folder list -a <ACCOUNT>` 로 확인)
+- `--output json` 은 **글로벌 옵션** — `himalaya --output json envelope list ...` 순서로 와야 함 (서브명령 뒤 `-O json` 이 아닙니다)
+
+### cron 등록은 했는데 정시에 발화 안 됨
 
 ```bash
-systemctl --user status openclaw-gateway
+systemctl status cron
 ```
 
-### `runs`에 발화는 기록되는데 실제 메일 이동 안 됨
+`active (running)` 인지 확인. 죽어 있으면:
 
-`durationMs`가 1~5ms로 매우 짧다면 cron이 system event만 enqueue하고 즉시 종료한 것. 실제 분류·이동은 메인 세션에서 비동기로 일어나므로:
-
-- TUI를 켜둬야 메인 세션이 깨어 처리
-- 또는 cron 프롬프트를 더 명확하게: "반드시 himalaya로 실제 이동까지 수행하고, 작업 끝나면 한 줄 요약"
-
-### LLM이 spam을 ham으로 잘못 분류 (또는 반대)
-
-프롬프트 보강. cron 프롬프트를 다음처럼 명시:
-
-```
-오늘 날짜는 <YYYY-MM-DD>이다. 학습 데이터 기준 미래 날짜라고 spam으로 판단하지 말 것.
-스팸 판정 기준:
-- 발신자가 명백한 정상 서비스 도메인 → ham
-- 광고/마케팅/피싱성 → spam
-- 본인이 동의한 알림(영수증, 인증) → ham
-- 모호하면 ham
+```bash
+sudo systemctl start cron
+sudo systemctl enable cron
 ```
 
-### 반복 cron이 7일 후 자동 만료됨
+발화 자체 추적:
 
-OpenClaw cron의 알려진 제약. 갱신:
-
-```
-spam-filter를 같은 사양으로 새로 등록해줘
+```bash
+journalctl -u cron --since "1 hour ago" | grep spam-filter
 ```
 
-### SKILL.md를 만들었는데 에이전트가 인식 못함
+### Gateway가 새 SKILL.md를 못 봄
 
-`openclaw skills info openclaw-cron` 출력에서 `Visible to model: yes`인지 확인. 만약 `△ Needs setup`이면 SKILL.md frontmatter의 YAML 문법이 잘못된 것. 다른 스킬 (`himalaya`) 형식과 비교.
-
-게이트웨이 재시작 잊었으면:
+Gateway는 시작 시 SKILL을 로드합니다. 변경 후 반드시 재시작:
 
 ```bash
 systemctl --user restart openclaw-gateway
 ```
 
-### `AGENTS.md`/`TOOLS.md`는 자동 인식 안 되는데 SKILL.md는 됨
+`openclaw skills info linux-cron` 출력이 `△ Needs setup` 이면 SKILL.md frontmatter YAML 문법 오류 — 다른 스킬(`himalaya`) 형식과 비교.
 
-알려진 OpenClaw 버그 ([Issue #29387](https://github.com/openclaw/openclaw/issues/29387)) — bootstrap 파일 자동 주입에 회귀가 있습니다. 워크스페이스 루트의 AGENTS.md/TOOLS.md에 둔 가이드가 자동 로드 안 될 수 있어요. 그 경우 에이전트에 "TOOLS.md 읽어줘"라고 명시적으로 요청하거나, 스킬 형식(`skills/<name>/SKILL.md`)으로 옮기면 안정적입니다.
+### 에이전트가 옛 cron 컨텍스트로 응답
 
----
-
-## 부록 (advanced): bash 스크립트 + `openclaw infer` 방식
-
-OpenClaw cron 대신 결정적인 셸 스크립트 + 시스템 cron으로 자동화하고 싶을 때. LLM은 분류만, 셸이 이동·로깅을 직접 수행하므로 LLM hallucinate 영향 없음. 시스템 cron이 동작하면 TUI 안 켜져 있어도 발화.
-
-### 스크립트 생성
+OpenClaw 워크스페이스 메모리(`~/.openclaw/...` 아래 MEMORY.md 등)에 옛 운영 지식이 박혀 있을 수 있어요. 찾아서 갱신:
 
 ```bash
-mkdir -p ~/.openclaw/scripts ~/.openclaw/logs
-nano ~/.openclaw/scripts/spam-filter.sh
+grep -rln "openclaw cron list" ~/.openclaw/ 2>/dev/null
 ```
 
-내용:
-
-```bash
-#!/usr/bin/env bash
-set -euo pipefail
-
-TARGET_FOLDER="ai-test"
-BATCH_SIZE=5
-SLEEP_BETWEEN_CALLS=5
-LOG_FILE="$HOME/.openclaw/logs/spam-classify.jsonl"
-
-mkdir -p "$(dirname "$LOG_FILE")"
-touch "$LOG_FILE"
-
-mapfile -t IDS < <(himalaya envelope list -o json 2>/dev/null \
-    | jq -r '.[].id' | head -"$BATCH_SIZE")
-
-for ID in "${IDS[@]}"; do
-  # 멱등성 — 이미 처리한 ID 스킵
-  if [ -s "$LOG_FILE" ] && jq -e --argjson id "$ID" \
-       'select(.id == $id)' "$LOG_FILE" >/dev/null 2>&1; then
-    continue
-  fi
-
-  CONTENT=$(himalaya message read --preview "$ID" 2>/dev/null || true)
-  [ -z "$CONTENT" ] && continue
-
-  SUBJECT=$(echo "$CONTENT" | grep -m1 '^Subject:' | sed 's/^Subject: //' || true)
-  FROM=$(echo "$CONTENT" | grep -m1 '^From:' | sed 's/^From: //' || true)
-
-  PROMPT="Classify the following email as spam or ham. Output STRICTLY raw JSON only.
-
-Email:
-$CONTENT
-
-Format: {\"decision\":\"spam|ham\",\"reason\":\"한 줄 설명\"}"
-
-  RAW=$(openclaw infer model run --prompt "$PROMPT" 2>&1 || true)
-  JSON=$(echo "$RAW" | grep -oE '\{"decision":[^}]+\}' | head -1 || true)
-
-  if [ -z "$JSON" ]; then
-    jq -nc --arg ts "$(date -Iseconds)" --argjson id "$ID" \
-      --arg subject "$SUBJECT" --arg from "$FROM" \
-      --arg decision "error" --arg reason "LLM no text output" \
-      --arg action "skipped" \
-      '{ts:$ts,id:$id,subject:$subject,from:$from,decision:$decision,reason:$reason,action:$action}' \
-      >> "$LOG_FILE"
-    sleep "$SLEEP_BETWEEN_CALLS"
-    continue
-  fi
-
-  DECISION=$(echo "$JSON" | jq -r .decision)
-  REASON=$(echo "$JSON" | jq -r .reason)
-
-  ACTION="kept"
-  if [ "$DECISION" = "spam" ]; then
-    himalaya message move "$TARGET_FOLDER" "$ID" >/dev/null 2>&1 \
-      && ACTION="moved_to_$TARGET_FOLDER" \
-      || ACTION="move_failed"
-  fi
-
-  jq -nc --arg ts "$(date -Iseconds)" --argjson id "$ID" \
-    --arg subject "$SUBJECT" --arg from "$FROM" \
-    --arg decision "$DECISION" --arg reason "$REASON" \
-    --arg action "$ACTION" \
-    '{ts:$ts,id:$id,subject:$subject,from:$from,decision:$decision,reason:$reason,action:$action}' \
-    >> "$LOG_FILE"
-
-  sleep "$SLEEP_BETWEEN_CALLS"
-done
-```
-
-실행 권한 + 시스템 cron 등록:
-
-```bash
-chmod +x ~/.openclaw/scripts/spam-filter.sh
-
-# 시스템 crontab (5분마다)
-crontab -e
-# 다음 한 줄 추가:
-# */5 * * * * /home/<user>/.openclaw/scripts/spam-filter.sh
-```
-
-### 검증
-
-```bash
-# 수동 1회 실행
-~/.openclaw/scripts/spam-filter.sh
-
-# 로그 확인
-cat ~/.openclaw/logs/spam-classify.jsonl | jq | tail
-```
-
-### 트레이드오프
-
-| | 본문 (OpenClaw cron + 스킬) | 부록 (bash + infer) |
-|---|---|---|
-| 학습 부담 | 낮음 (자연어로 관리) | 높음 (bash·jq·cron 표현식) |
-| TUI 의존 | 발화 시 TUI 켜져 있어야 처리 | 무관 |
-| LLM hallucinate 영향 | 있음 (메인 세션이 처리) | 없음 (셸이 결정적) |
-| 강의 정체성 일치 | 높음 (OpenClaw 생태계) | 낮음 (OpenClaw 외부) |
+발견된 파일의 해당 항목을 새 정책(linux-cron / Ubuntu crontab)으로 수정.
 
 ---
 
 ## Day 3 산출물
 
-- [ ] `paired.json` scope 패치 + readonly 잠금 적용
-- [ ] `openclaw-cron` SKILL.md 작성 + 에이전트 자동 인식 확인 (`Visible to model: yes`)
-- [ ] 자연어 "스케줄 확인"으로 cron 상태 조회 가능
-- [ ] `spam-filter` cron 작업 등록 + 5분 후 자동 발화 검증
-- [ ] 메일 상태(INBOX·ai-test) 변화 관찰
+- [ ] `~/.openclaw/scripts/spam-filter.sh` 작성 + 수동 실행 통과 (10통 분류 + JSONL 누적)
+- [ ] Ubuntu `crontab -e` 등록 + 다음 정시 자동 발화 검증
+- [ ] `linux-cron` SKILL.md 작성 + `Visible to model: yes` 확인
+- [ ] 자연어 "스케줄 확인" 으로 에이전트가 `crontab -l` 결과를 표로 응답
+- [ ] 자연어 "지금 한번 실행해봐" 로 수동 트리거 가능
 
-다음: Day 4: Discord 연결 + 대화형 비서 *(작성 예정)*
+다음: [Day 4: Discord 연결 + 대화형 비서](04-day4-discord.html) — 같은 자동화를 Discord 채널로 받고 봇 대화로 운영합니다.
