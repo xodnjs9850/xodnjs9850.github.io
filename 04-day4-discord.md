@@ -79,7 +79,7 @@ OpenClaw는 토큰을 평문으로 설정 파일에 박지 않습니다. 대신 
 먼저 셸에 한 번 export:
 
 ```bash
-export DISCORD_BOT_TOKEN="여기에_실제_봇_토큰_붙여넣기"
+export DISCORD_BOT_TOKEN="<paste-your-bot-token-here>"
 ```
 
 ### 1-2. Discord 채널을 OpenClaw에 등록
@@ -125,8 +125,8 @@ Day 3에서 자리만 만들어둔 `~/.openclaw/secrets/discord.env` 파일을 �
 mkdir -p ~/.openclaw/secrets
 
 cat > ~/.openclaw/secrets/discord.env <<'EOF'
-export DISCORD_BOT_TOKEN="여기에_실제_봇_토큰_붙여넣기"
-export DISCORD_WEBHOOK_URL="여기에_웹후크_URL_붙여넣기"
+export DISCORD_BOT_TOKEN="<paste-your-bot-token-here>"
+export DISCORD_WEBHOOK_URL="<paste-your-webhook-url-here>"
 EOF
 
 chmod 600 ~/.openclaw/secrets/discord.env
