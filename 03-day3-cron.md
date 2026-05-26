@@ -132,6 +132,15 @@ source ~/.bashrc
 
 ### 2-2. `spam-filter.sh` 작성
 
+스크립트가 의존하는 도구: `himalaya`(Day 2), `openclaw`(Day 1), **`jq`**(JSON 파싱), `curl`(webhook 발송).
+
+> **macOS 사용자는 `jq` 를 brew로 먼저 설치하세요.** Linux/WSL Ubuntu는 보통 기본 포함.
+> ```bash
+> brew install jq
+> jq --version
+> ```
+{: .warning }
+
 `~/.openclaw/scripts/spam-filter.sh` 파일에 아래 내용을 넣습니다. `nano` 로 열어 그대로 붙여넣기 + 저장(`Ctrl+O`, Enter, `Ctrl+X`):
 
 ```bash
@@ -165,7 +174,10 @@ checked=0; spam_count=0; ham_count=0; moved=0
 # === 폴더별 반복 ===
 for SOURCE_FOLDER in "${SOURCE_FOLDERS[@]}"; do
   envelopes=$(himalaya --output json envelope list -a "$ACCOUNT" -f "$SOURCE_FOLDER" -s "$BATCH_SIZE" 2>/dev/null || echo "[]")
-  mapfile -t ids < <(echo "$envelopes" | jq -r '.[].id')
+  ids=()
+  while IFS= read -r line; do
+    ids+=("$line")
+  done < <(echo "$envelopes" | jq -r '.[].id')
 
   for id in "${ids[@]}"; do
     meta=$(echo "$envelopes" | jq -c ".[] | select(.id == \"$id\")")
@@ -467,6 +479,14 @@ OpenClaw 메인 에이전트에서 자연어로:
 ---
 
 ## 트러블슈팅
+
+### macOS: `mapfile: command not found`
+
+macOS 시스템 bash는 3.2 (라이선스 이슈로 업데이트 안 됨)라 bash 4+ builtin인 `mapfile` 이 없습니다. 본문 §2-2 의 호환 코드(`while IFS= read -r line; do ids+=("$line"); done < <(...)`)를 사용하면 macOS·WSL 양쪽 모두 동작합니다. 옛 버전을 그대로 두셨다면 본문 스크립트를 다시 복사해 덮어쓰세요.
+
+### macOS: `jq: command not found`
+
+jq는 macOS 기본 미포함입니다. `brew install jq` 후 재시도.
 
 ### `env: 'bash\r': No such file or directory`
 
