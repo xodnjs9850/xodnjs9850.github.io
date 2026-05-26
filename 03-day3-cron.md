@@ -361,10 +361,14 @@ tail -n 20 ~/.openclaw/logs/spam-filter.jsonl
 
 새 분류 결과가 누적됐으면 cron이 정상 발화한 것. (스크립트가 침묵 운영이라 `spam-filter.cron.log` 가 비어 있을 수 있는데, 이는 정상입니다 — 결과는 JSONL 쪽에 들어가요.)
 
-cron daemon 자체가 발화했는지 보고 싶다면:
+cron daemon 자체가 발화했는지 보고 싶다면 (OS별):
 
 ```bash
+# WSL / Linux (systemd)
 journalctl -u cron --since "today 00:00" | grep spam-filter | tail -5
+
+# macOS (unified logging)
+log show --predicate 'process == "cron"' --last 1h 2>&1 | grep spam-filter | head -5
 ```
 
 `(<사용자>) CMD (BASH_ENV=... bash -lc '...')` 같은 줄이 보이면 OS 레벨에서 정확히 트리거된 것.
@@ -543,6 +547,8 @@ ps aux | grep "openclaw gateway" | grep -v grep
 
 ### cron 등록은 했는데 정시에 발화 안 됨
 
+#### WSL / Linux
+
 ```bash
 systemctl status cron
 ```
@@ -559,6 +565,28 @@ sudo systemctl enable cron
 ```bash
 journalctl -u cron --since "1 hour ago" | grep spam-filter
 ```
+
+#### macOS
+
+systemd 없음. launchd가 cron daemon을 관리합니다. `journalctl` / `systemctl` 모두 동작 안 함.
+
+```bash
+# cron daemon 실행 확인
+sudo launchctl list | grep com.vix.cron
+
+# 발화 추적 (unified logging)
+log show --predicate 'process == "cron"' --last 1h 2>&1 | grep spam-filter | head -10
+```
+
+#### OS 무관 — 가장 직관적인 확인
+
+분류 결과 누적 자체를 보면 cron이 정시마다 도는지 한눈에 보입니다:
+
+```bash
+tail -n 20 ~/.openclaw/logs/spam-filter.jsonl
+```
+
+`"ts"` 필드의 시각이 매 정시마다 새 그룹으로 추가됐으면 cron이 정상 발화한 것.
 
 ### Gateway가 새 SKILL.md를 못 봄
 
