@@ -223,16 +223,20 @@ GUI 세션이 있는 환경(macOS, Ubuntu Desktop)은 OS 키링을 사용합니�
 
 #### Linux Desktop (`secret-tool`)
 
-> **⚠️ `account <이름>` 값은 마법사에서 정한 Account name과 정확히 일치해야 합니다.**
-> 마법사가 자동 생성한 `~/.config/himalaya/config.toml`에는
-> `backend.auth.command = "secret-tool lookup account <이름> service himalaya-imap"`
-> 형태로 들어가 있고, secret-tool로 저장할 때도 같은 `<이름>`을 써야 조회가 됩니다.
+> **⚠️ 저장 명령의 모든 키 이름은 himalaya 가 자동 생성한 `~/.config/himalaya/config.toml` 의 `backend.auth.command` 와 정확히 일치해야 합니다.**
 >
-> 본인 config의 실제 이름 확인:
+> 본인 config 확인 (가장 먼저 실행):
 > ```bash
 > grep auth.command ~/.config/himalaya/config.toml
 > ```
-> 아래 예시에선 Account name을 `naver`로 가정합니다. 다른 이름(예: `naver_linux`, `personal` 등)을 쓰셨다면 명령의 `naver` 부분을 본인 이름으로 바꿔 실행하세요.
+>
+> macOS의 경우 보통 다음 형식이 나옵니다:
+> ```
+> backend.auth.command = "security find-generic-password -a 'naver' -s 'himalaya-naver-imap' -w"
+> ```
+> Linux Desktop의 경우 secret-tool 형식이 같은 패턴(`himalaya-<account>-imap`)을 쓰는지 본인 환경에서 확인하세요. 저장 명령(`secret-tool store`/`security add-generic-password`)의 `account`·`service` 키가 위 출력의 `-a`·`-s` 값과 정확히 일치해야 himalaya 가 비밀번호를 조회할 수 있습니다.
+>
+> 아래 예시는 Account name이 `naver` 이고 himalaya가 `service` 키에 account 이름을 포함하지 않은 경우를 가정합니다. 본인 grep 결과와 다르면 명령을 본인 형식에 맞춰 수정하세요.
 {: .important }
 
 ```bash
@@ -272,21 +276,23 @@ APP_PASSWORD='<paste-your-12-char-app-password>'
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 # IMAP 비밀번호 저장 (-U: 이미 있으면 덮어쓰기)
+# service 이름의 가운데 "$ACCOUNT_NAME" 가 박혀야 himalaya 가 자동 생성한
+# backend.auth.command 의 -s 'himalaya-<account>-imap' 와 일치합니다.
 security add-generic-password -U \
     -a "$ACCOUNT_NAME" \
-    -s "himalaya-imap" \
+    -s "himalaya-$ACCOUNT_NAME-imap" \
     -l "himalaya $ACCOUNT_NAME imap" \
     -w "$APP_PASSWORD"
 
 # SMTP 비밀번호 저장
 security add-generic-password -U \
     -a "$ACCOUNT_NAME" \
-    -s "himalaya-smtp" \
+    -s "himalaya-$ACCOUNT_NAME-smtp" \
     -l "himalaya $ACCOUNT_NAME smtp" \
     -w "$APP_PASSWORD"
 
 # 길이 검증 (12 출력되면 정상)
-security find-generic-password -a "$ACCOUNT_NAME" -s "himalaya-imap" -w | tr -d '\n' | wc -c
+security find-generic-password -a "$ACCOUNT_NAME" -s "himalaya-$ACCOUNT_NAME-imap" -w | tr -d '\n' | wc -c
 ```
 
 옵션 해석:
@@ -373,6 +379,18 @@ openclaw
 ### "secret-tool: org.freedesktop.secrets was not provided"
 
 WSL Ubuntu에서 키링 미가동. 위 [Block 3 — WSL Ubuntu (파일 기반)](#wsl-ubuntu-파일-기반) 섹션으로 전환.
+
+### macOS: `SecKeychainSearchCopyNext: The specified item could not be found`
+
+`himalaya envelope list` 시 위 에러가 나면 **저장 명령의 service 이름이 himalaya가 찾는 이름과 다른 것**. 에러 메시지 안에 himalaya가 부르는 명령이 그대로 노출됩니다:
+
+```
+command security find-generic-password -a 'naver' -s 'himalaya-naver-imap' -w
+                                                       ^^^^^^^^^^^^^^^^^^^
+                                                       이 값이 정확한 service 이름
+```
+
+`-s '<여기에 보이는 값>'` 를 그대로 `security add-generic-password` 의 `-s` 에 박아 재저장하세요. 보통 `himalaya-<account>-imap` / `himalaya-<account>-smtp` 형식입니다.
 
 ### IMAP encryption을 `None`으로 설정해서 연결 안 됨
 
