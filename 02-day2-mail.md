@@ -214,9 +214,14 @@ message.send.backend.auth.command = "cat /home/<사용자>/.config/himalaya/.nav
 
 ### macOS / Linux Desktop (키링)
 
-GUI 세션이 있는 환경(macOS, Ubuntu Desktop)은 키링을 사용할 수 있습니다.
+GUI 세션이 있는 환경(macOS, Ubuntu Desktop)은 OS 키링을 사용합니다. 단, **두 OS는 명령이 다릅니다**:
 
-#### Linux Desktop
+- **Linux Desktop** — `secret-tool` (libsecret + D-Bus)
+- **macOS** — `security` (macOS 기본 제공)
+
+본인 OS 섹션으로 바로 가세요.
+
+#### Linux Desktop (`secret-tool`)
 
 > **⚠️ `account <이름>` 값은 마법사에서 정한 Account name과 정확히 일치해야 합니다.**
 > 마법사가 자동 생성한 `~/.config/himalaya/config.toml`에는
@@ -252,11 +257,50 @@ printf '%s' '앱비밀번호' | secret-tool store \
 secret-tool lookup account "$ACCOUNT_NAME" service himalaya-imap | wc -c
 ```
 
-#### macOS
+#### macOS (`security`)
 
-macOS는 Keychain을 자동 사용합니다. 마법사가 인증 단계에서 Keychain 옵션을 제시하면 그쪽으로 진행하면 됩니다. 또는 secret-tool 호환 방식으로 저장하려면 `libsecret`을 brew로 설치 후 위와 동일 명령.
+macOS는 **`security`** 명령(macOS 기본 제공)으로 Keychain에 직접 저장합니다.
 
-> 키링 lookup이 발급받은 비밀번호 길이와 다르면 (예: 12자리인데 10자리만 저장됨) 인터랙티브 입력 중 글자 누락이 일어난 것. 다시 `secret-tool clear` + `printf '%s' | secret-tool store`로 깨끗히 재저장하세요.
+> `secret-tool` 은 Linux 전용(libsecret + D-Bus)이라 macOS에선 동작하지 않습니다. Homebrew의 `libsecret` 도 macOS Keychain과 통합되지 않으니 시도하지 마세요. macOS는 native `security` 명령이 정답입니다.
+{: .important }
+
+```bash
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# 👇 이 두 줄만 본인 값으로 변경
+ACCOUNT_NAME="naver"            # himalaya 마법사에서 정한 계정 이름
+APP_PASSWORD='<paste-your-12-char-app-password>'
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+# IMAP 비밀번호 저장 (-U: 이미 있으면 덮어쓰기)
+security add-generic-password -U \
+    -a "$ACCOUNT_NAME" \
+    -s "himalaya-imap" \
+    -l "himalaya $ACCOUNT_NAME imap" \
+    -w "$APP_PASSWORD"
+
+# SMTP 비밀번호 저장
+security add-generic-password -U \
+    -a "$ACCOUNT_NAME" \
+    -s "himalaya-smtp" \
+    -l "himalaya $ACCOUNT_NAME smtp" \
+    -w "$APP_PASSWORD"
+
+# 길이 검증 (12 출력되면 정상)
+security find-generic-password -a "$ACCOUNT_NAME" -s "himalaya-imap" -w | tr -d '\n' | wc -c
+```
+
+옵션 해석:
+
+- `add-generic-password` — 일반 비밀번호 저장
+- `-U` — 같은 키가 있으면 **덮어쓰기**(Update). 재실행 안전.
+- `-a` — account (마법사에서 정한 이름)
+- `-s` — service (himalaya가 조회할 키 이름)
+- `-l` — label (Keychain Access.app 에 보이는 표시명)
+- `-w` — password (인자로 직접)
+
+조회는 himalaya 가 자동으로 부릅니다. 직접 확인하고 싶으면 **Keychain Access.app**(`/System/Applications/Utilities/Keychain Access.app`)에서 `himalaya naver imap` / `himalaya naver smtp` 라벨로 검색.
+
+> 길이 검증이 12가 아니면 `APP_PASSWORD` 값에 공백/줄바꿈이 섞였을 가능성. 따옴표 안 값을 다시 확인하고 명령 재실행 (-U 덕분에 안전).
 {: .warning }
 
 ---
