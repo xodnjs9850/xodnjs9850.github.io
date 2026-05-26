@@ -169,7 +169,7 @@ LOG_FILE="$LOG_DIR/spam-filter.jsonl"
 mkdir -p "$LOG_DIR"
 ts() { date -Iseconds; }
 
-checked=0; spam_count=0; ham_count=0; moved=0
+checked=0; spam_count=0; ham_count=0; moved=0; error_count=0
 
 # === 폴더별 반복 ===
 for SOURCE_FOLDER in "${SOURCE_FOLDERS[@]}"; do
@@ -216,6 +216,14 @@ JSON 한 줄만 출력. 마크다운 코드 펜스로 감싸지 마세요. 다�
     # 모델 명시 X — OpenClaw 라우팅에 위임
     raw=$(openclaw infer model run --gateway --json --prompt "$prompt" 2>/dev/null || echo '{}')
 
+    # Gateway 응답 검증 — outputs[0].text 가 없으면 시스템 오류 (Gateway 죽음 등)
+    # 이 경우 모든 메일을 silent ham으로 묻어버리지 않도록 명시적 실패 처리.
+    if ! echo "$raw" | jq -e '.outputs[0].text' >/dev/null 2>&1; then
+      echo "⚠️  [spam-filter] LLM 호출 실패 — Gateway 응답 누락. id=$id" >&2
+      error_count=$((error_count + 1))
+      continue   # 이 메일은 건드리지 않고 다음으로
+    fi
+
     # OpenClaw 응답 → .outputs[0].text 안에 LLM JSON 문자열 → 두 번 파싱
     decision=$(echo "$raw" | jq -r '.outputs[0].text | fromjson? | .decision // "ham"')
     [ -z "$decision" ] && decision="ham"
@@ -234,8 +242,8 @@ JSON 한 줄만 출력. 마크다운 코드 펜스로 감싸지 마세요. 다�
 done
 
 # === 3. 결과 알림 ===
-msg=$(printf '**[spam-filter]** %s\n검사 %d통 / 스팸 %d / ham %d\n이동 완료: %d통 → `%s`' \
-  "$(date '+%Y-%m-%d %H:%M')" "$checked" "$spam_count" "$ham_count" "$moved" "$TARGET_FOLDER")
+msg=$(printf '**[spam-filter]** %s\n검사 %d통 / 스팸 %d / ham %d / 분류실패 %d\n이동 완료: %d통 → `%s`' \
+  "$(date '+%Y-%m-%d %H:%M')" "$checked" "$spam_count" "$ham_count" "$error_count" "$moved" "$TARGET_FOLDER")
 
 # webhook URL이 있으면 Discord로, 없으면 터미널에 출력
 if [ -n "${DISCORD_WEBHOOK_URL:-}" ]; then
@@ -254,6 +262,9 @@ fi
 ```bash
 chmod +x ~/.openclaw/scripts/spam-filter.sh
 ```
+
+> **분류실패(error_count)에 대해** — 스크립트는 Gateway가 죽거나 LLM 응답이 누락되면 그 메일을 **분류실패** 로 카운트하고 건드리지 않습니다. 이 안전망이 없으면 시스템 오류 시 모든 메일이 silent하게 ham으로 분류돼버려요(잘못된 분류를 사용자가 인지 못 함). 결과 메시지에 `분류실패 N` 이 나오면 Gateway 상태부터 점검(`ps aux | grep openclaw`).
+{: .note }
 
 ### 2-3. CRLF 함정 회피
 
@@ -509,6 +520,16 @@ ps aux | grep "openclaw gateway" | grep -v grep
 ```
 
 안 떠 있으면 별도 터미널에서 `openclaw gateway` 실행. cron 자동 실행 시점에도 Gateway가 떠 있어야 정상 동작합니다.
+
+### 결과 메시지에 `분류실패 N` 이 검사 통수와 같음
+
+Gateway 가 죽어서 모든 LLM 호출이 실패한 경우. webhook(또는 콘솔) 메시지가 `검사 20통 / 스팸 0 / ham 0 / 분류실패 20` 형태로 도착하면 즉시 Gateway 점검:
+
+```bash
+ps aux | grep "openclaw gateway" | grep -v grep
+```
+
+비어있으면 별도 터미널에서 `openclaw gateway` 재기동 후 `~/.openclaw/scripts/spam-filter.sh` 재실행. Gateway가 떠있는데도 일부 메일만 분류실패면 LLM 응답 형식 변형(드물지만 markdown code fence 등). 그 경우 stderr 로그에 `⚠️ [spam-filter] LLM 호출 실패` 줄이 보이고, 해당 메일은 다음 사이클에서 자동 재시도됩니다.
 
 ### `Model override "..." is not allowed for agent "main"`
 
