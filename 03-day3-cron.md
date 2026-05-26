@@ -154,7 +154,7 @@ nano ~/.openclaw/scripts/spam-filter.sh
 #!/usr/bin/env bash
 # spam-filter.sh — 여러 폴더의 최근 N통을 분류, spam은 ai-test로 이동, 결과 출력/알림
 # LLM 라우팅은 OpenClaw 책임 (모델 명시 X), Gateway 경유
-set -euo pipefail
+set -eo pipefail   # -u 제거: macOS 시스템 bash 3.2 의 빈 array 처리 차이 회피
 
 # === 설정 ===
 ACCOUNT="naver"                 # 본인 himalaya 계정 이름과 일치시키기 (Day 2에서 정한 이름)
@@ -487,6 +487,10 @@ macOS 시스템 bash는 3.2 (라이선스 이슈로 업데이트 안 됨)라 bas
 ### macOS: `jq: command not found`
 
 jq는 macOS 기본 미포함입니다. `brew install jq` 후 재시도.
+
+### macOS: `ids[@]: unbound variable`
+
+`set -u` 옵션이 macOS 시스템 bash 3.2의 빈 array 처리(`unset` 으로 취급)와 충돌. 본문 §2-2 스크립트는 `set -eo pipefail` 로 `-u` 를 빼서 호환됩니다. 옛 버전을 그대로 두셨다면 스크립트 첫 `set -euo pipefail` 줄을 `set -eo pipefail` 로 수정하거나 본문 스크립트를 다시 복사하세요.
 
 ### `env: 'bash\r': No such file or directory`
 
